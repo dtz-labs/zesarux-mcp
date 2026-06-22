@@ -69,7 +69,13 @@ Restart Claude and the tools will be available.
 
 ## Documentation
 
-- **[Full Documentation](docs/README.md)** - Detailed setup, all tools, examples
+- **[Documentation index](docs/README.md)** - Start here
+- **[Installation & Configuration](docs/installation.md)** - Install ZEsarUX and the server
+- **[Configuring MCP Clients](docs/clients.md)** - Claude Desktop/Code, Codex, OpenCode, JetBrains
+- **[Available Tools](docs/tools.md)** - All tools with examples
+- **[Example Usage](docs/examples.md)** - Talk-to-it and quick call examples
+- **[Development](docs/development.md)** - Build, structure, protocol mapping
+- **[Troubleshooting](docs/troubleshooting.md)** - Common problems
 - **[ZRCP Specification](docs/SPEC.md)** - Complete protocol reference
 
 ## Quick Examples
