@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.3.0
+
+### Added
+
+- **Automatic port selection (AUTO mode).** When `ZESARUX_PORT` is not set and
+  auto-launch is on, the server picks the **first free port ≥ 10000** and
+  launches its own ZEsarUX there. Several MCP servers can now run side by side
+  with no port configuration — they fan out to 10000, 10001, 10002, … each
+  owning its own emulator. Set `ZESARUX_PORT` to pin a specific port (or to
+  attach to an emulator already running on it).
+
 ## v2.2.0
 
 ### Changed
