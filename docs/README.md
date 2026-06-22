@@ -31,12 +31,12 @@ brew install zesarux
 
 **Starting ZEsarUX with ZRCP:**
 ```bash
-/Applications/ZEsarUX.app/Contents/MacOS/ZEsarUX --enablezrcp --zrcpport 10000
+/Applications/ZEsarUX.app/Contents/MacOS/zesarux --enable-remoteprotocol --remoteprotocol-port 10000
 ```
 
 Or create an alias in your shell profile:
 ```bash
-alias zesarux='/Applications/ZEsarUX.app/Contents/MacOS/ZEsarUX'
+alias zesarux='/Applications/ZEsarUX.app/Contents/MacOS/zesarux'
 ```
 
 #### Linux (Ubuntu/Debian)
@@ -57,7 +57,7 @@ sudo make install
 
 **Starting ZEsarUX with ZRCP:**
 ```bash
-zesarux --enablezrcp --zrcpport 10000
+zesarux --enable-remoteprotocol --remoteprotocol-port 10000
 ```
 
 #### Windows
@@ -65,7 +65,7 @@ zesarux --enablezrcp --zrcpport 10000
 Download from [ZEsarUX releases](https://github.com/chernandezba/zesarux/releases) and install. Start with:
 
 ```cmd
-zesarux.exe --enablezrcp --zrcpport 10000
+zesarux.exe --enable-remoteprotocol --remoteprotocol-port 10000
 ```
 
 ### Enabling ZRCP in Configuration
@@ -78,9 +78,8 @@ Alternatively, enable ZRCP in ZEsarUX configuration file:
 
 Add:
 ```
-enablezrcp=1
-zrcpport=10000
-zrcpinterface=0.0.0.0
+enable-remoteprotocol
+remoteprotocol-port 10000
 ```
 
 ### Installing the MCP Server
@@ -696,7 +695,7 @@ See [SPEC.md](SPEC.md) for the full specification including all tools and their 
 **Problem:** Server fails to connect to ZEsarUX
 
 **Solutions:**
-- Ensure ZEsarUX is running with `--enablezrcp`
+- Ensure ZEsarUX is running with `--enable-remoteprotocol`
 - Check that the port matches (`ZESARUX_PORT`)
 - Verify firewall settings
 - Check if ZEsarUX is listening: `netstat -an | grep 10000`

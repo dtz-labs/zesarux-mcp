@@ -27,7 +27,7 @@ sudo apt-get install zesarux
 ### 2. Start ZEsarUX with ZRCP
 
 ```bash
-zesarux --enablezrcp --zrcpport 10000
+zesarux --enable-remoteprotocol --remoteprotocol-port 10000
 ```
 
 ### 3. Install the MCP Server
@@ -91,7 +91,7 @@ Restart Claude and the tools will be available.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ZESARUX_HOST` | `localhost` | Host where ZEsarUX ZRCP is listening |
-| `ZESARUX_PORT` | `10000` | ZRCP port (matches `--zrcpport`) |
+| `ZESARUX_PORT` | `10000` | ZRCP port (matches `--remoteprotocol-port`) |
 | `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` (all logs go to stderr) |
 | `ZESARUX_TIMEOUT` | `30000` | ZRCP request timeout, ms |
 | `ZESARUX_RETRY_ATTEMPTS` | `3` | Connection retry attempts |
