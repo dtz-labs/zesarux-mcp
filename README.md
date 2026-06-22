@@ -135,7 +135,7 @@ Then point your config at `"command": "node", "args": ["/absolute/path/to/zesaru
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ZESARUX_HOST` | `localhost` | Host where ZEsarUX ZRCP is listening |
-| `ZESARUX_PORT` | `10000` | ZRCP port (matches `--remoteprotocol-port`) |
+| `ZESARUX_PORT` | _(auto)_ | ZRCP port (matches `--remoteprotocol-port`). Unset in AUTO mode → first free port ≥ 10000; set it to pin a specific port |
 | `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` (all logs go to stderr) |
 | `ZESARUX_TIMEOUT` | `30000` | ZRCP request timeout, ms |
 | `ZESARUX_RETRY_ATTEMPTS` | `3` | Connection retry attempts |
@@ -161,6 +161,25 @@ and **`kill_emulator`** tools (the latter only stops an emulator the server
 started). And if a tool call fails because the connection dropped, the server
 will — unless `ZESARUX_AUTOLAUNCH=false` — try once to relaunch ZEsarUX and
 reconnect before retrying the call.
+
+### Running several servers (automatic ports)
+
+In AUTO mode (auto-launch on, `ZESARUX_PORT` **not** set) the server picks the
+**first free port ≥ 10000** and launches its own ZEsarUX there. So you can
+register several MCP servers with no port configuration at all and they fan out
+automatically — the first takes `10000`, the next `10001`, then `10002`, … each
+with its own emulator:
+
+```bash
+claude mcp add zesarux-a -- npx -y @dtz-labs/zesarux-mcp
+claude mcp add zesarux-b -- npx -y @dtz-labs/zesarux-mcp
+```
+
+To **pin** a server to a specific port — or to attach to an emulator that is
+already running — set `ZESARUX_PORT` explicitly (e.g. `ZESARUX_PORT=10000`); the
+server then uses exactly that port and does not scan. Automatic port selection
+only happens in AUTO mode; with `ZESARUX_AUTOLAUNCH=false` the server just
+connects to `ZESARUX_PORT` (default `10000`).
 
 ## Documentation
 

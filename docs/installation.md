@@ -106,7 +106,7 @@ Configuration is done via environment variables:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `ZESARUX_HOST` | `localhost` | ZEsarUX host address |
-| `ZESARUX_PORT` | `10000` | ZRCP port |
+| `ZESARUX_PORT` | _(auto)_ | ZRCP port. Unset in AUTO mode → first free port ≥ 10000; set it to pin a port or attach to a running emulator |
 | `ZESARUX_TIMEOUT` | `30000` | Connection timeout (ms) |
 | `ZESARUX_AUTO_RECONNECT` | `true` | Auto-reconnect on disconnect |
 | `ZESARUX_AUTOLAUNCH` | `true` | Launch ZEsarUX automatically when it isn't reachable (set `false` to opt out) |
@@ -140,6 +140,24 @@ SIGKILL if it doesn't exit). A ZEsarUX you started yourself is detected as
 If the launch times out (e.g. a slow first run, or a blocking first-run dialog),
 the emulator is left running so you can inspect it; it is still stopped when the
 server exits.
+
+### Automatic port selection (AUTO mode)
+
+When `ZESARUX_PORT` is **not** set and auto-launch is on, the server picks the
+**first free port ≥ 10000** and launches ZEsarUX there. Several MCP servers can
+therefore run side by side with no port configuration — they fan out to `10000`,
+`10001`, `10002`, … each owning its own emulator:
+
+```bash
+# two servers, no ZESARUX_PORT: first grabs 10000, second grabs 10001
+claude mcp add zesarux-a -- npx -y @dtz-labs/zesarux-mcp
+claude mcp add zesarux-b -- npx -y @dtz-labs/zesarux-mcp
+```
+
+Set `ZESARUX_PORT` to pin a specific port (and to attach to an emulator that is
+already running on it — a busy port is otherwise skipped as "not free"). With
+`ZESARUX_AUTOLAUNCH=false` no scanning happens; the server just connects to
+`ZESARUX_PORT` (default `10000`).
 
 ### Binary discovery order
 
