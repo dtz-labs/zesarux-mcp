@@ -1,5 +1,36 @@
 # Changelog
 
+## v2.1.0
+
+Runtime control of the ZEsarUX process from the MCP, plus automatic connection
+recovery. All documentation was also brought in line with the v2.0.0 command
+rebuild.
+
+### Added
+
+- **`launch_emulator` tool** — start ZEsarUX (with ZRCP enabled) and connect, on
+  demand. Locates the binary automatically or via `ZESARUX_PATH`. Works
+  regardless of `ZESARUX_AUTOLAUNCH` (it's an explicit action). If ZEsarUX is
+  already running it simply connects.
+- **`kill_emulator` tool** — stop ZEsarUX, but **only if this server started
+  it** (SIGTERM then SIGKILL after a grace period). An externally-launched
+  emulator is left untouched (`status: "not_managed"`).
+- **Automatic connection recovery** — when a tool call fails because the ZRCP
+  connection is down and `ZESARUX_AUTOLAUNCH=true`, the server tries once to
+  (re)launch ZEsarUX and reconnect, then retries the call.
+
+### Fixed
+
+- A deliberate `disconnect()` (e.g. during `kill_emulator`) no longer schedules
+  auto-reconnect attempts against the now-dead port.
+
+### Docs
+
+- README, `docs/tools.md`, `docs/development.md`, `docs/examples.md` and
+  `docs/SPEC.md` updated to the real v2.0.0 commands, the 66 real machine ids,
+  and the new tools. README gained a Quick Start (Claude Code, Claude Desktop,
+  Codex, Opencode) and a dedicated Installation section.
+
 ## v2.0.0
 
 Ground-up correction of the ZRCP command layer. The previous releases mapped MCP
