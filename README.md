@@ -96,6 +96,21 @@ Restart Claude and the tools will be available.
 | `ZESARUX_TIMEOUT` | `30000` | ZRCP request timeout, ms |
 | `ZESARUX_RETRY_ATTEMPTS` | `3` | Connection retry attempts |
 | `ZESARUX_AUTO_RECONNECT` | `true` | Reconnect automatically if the link drops |
+| `ZESARUX_AUTOLAUNCH` | `false` | Start ZEsarUX automatically if it isn't reachable |
+| `ZESARUX_PATH` | _(auto-detected)_ | Explicit path to the ZEsarUX binary |
+| `ZESARUX_ARGS` | _(none)_ | Extra args appended when launching (e.g. `--vo null --ao null` for headless) |
+| `ZESARUX_LAUNCH_TIMEOUT` | `20000` | How long to wait for the ZRCP port after launching, ms |
+
+### Auto-launching ZEsarUX
+
+By default the server only connects to a ZEsarUX you started yourself. Set
+`ZESARUX_AUTOLAUNCH=true` and, when ZEsarUX isn't reachable on startup, the
+server will find a local ZEsarUX binary, launch it with
+`--enable-remoteprotocol --remoteprotocol-port <port>`, wait for the port, then
+connect. An emulator the server launched is terminated when the server stops; a
+ZEsarUX you started yourself is left untouched. See
+[Installation & Configuration](docs/installation.md#auto-launching-zesarux) for
+binary discovery order and headless use.
 
 ## Documentation
 
