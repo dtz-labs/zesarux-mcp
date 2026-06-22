@@ -1,5 +1,7 @@
 # ZEsarUX MCP Server
 
+[![CI](https://github.com/dtz-labs/zesarux-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/dtz-labs/zesarux-mcp/actions/workflows/ci.yml)
+
 MCP server for [ZEsarUX ZX Spectrum emulator](https://github.com/chernandezba/zesarux) using ZRCP protocol.
 
 > **[dtz-labs](https://github.com/dtz-labs)** - Vibe coding 8-bit machines like there is no tomorrow
