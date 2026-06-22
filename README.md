@@ -4,6 +4,8 @@ MCP server for [ZEsarUX ZX Spectrum emulator](https://github.com/chernandezba/ze
 
 > **[dtz-labs](https://github.com/dtz-labs)** - Vibe coding 8-bit machines like there is no tomorrow
 
+![Claude Code driving ZEsarUX over MCP](screenshot.png)
+
 ## Features
 
 13 tool categories with 50+ operations: machine control, PEEK/POKE, debugging (breakpoints, registers, disassembly), tape/disk loading, snapshots, keyboard input, assembly, and more.
