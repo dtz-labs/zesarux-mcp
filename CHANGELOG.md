@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.2.0
+
+### Changed
+
+- **Auto-launch is now ON by default.** `ZESARUX_AUTOLAUNCH` defaults to `true`:
+  if nothing is listening on the ZRCP port at startup, the server locates a local
+  ZEsarUX binary and launches it (with the remote protocol enabled), then
+  connects. Set `ZESARUX_AUTOLAUNCH=false` to opt out (only connect to a ZEsarUX
+  you started yourself). A ZEsarUX you started yourself is still never launched or
+  killed by the server.
+
 ## v2.1.0
 
 Runtime control of the ZEsarUX process from the MCP, plus automatic connection
