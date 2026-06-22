@@ -16,6 +16,7 @@ import {
   resolveBinary,
   isPortOpen,
   waitForPort,
+  findFreePort,
   ZesaruxLauncher,
   bootstrapConnection,
   BootstrapDeps,
@@ -186,6 +187,29 @@ test('waitForPort resolves false when the port never opens', async () => {
   // Port 1 is reserved/unbindable; nothing will be listening for us.
   const open = await waitForPort('127.0.0.1', 1, { totalTimeoutMs: 400, intervalMs: 80 });
   assert.equal(open, false);
+});
+
+test('findFreePort returns the start port when it is free', async () => {
+  const port = await findFreePort('localhost', 10000, {
+    isPortOpen: async () => false, // nothing listening anywhere
+  });
+  assert.equal(port, 10000);
+});
+
+test('findFreePort skips busy ports and returns the first free one', async () => {
+  const busy = new Set([10000, 10001]); // 10002 is the first free
+  const port = await findFreePort('localhost', 10000, {
+    isPortOpen: async (_host, p) => busy.has(p),
+  });
+  assert.equal(port, 10002);
+});
+
+test('findFreePort falls back to the start port when every probed port is busy', async () => {
+  const port = await findFreePort('localhost', 10000, {
+    isPortOpen: async () => true, // everything busy
+    maxProbes: 4,
+  });
+  assert.equal(port, 10000);
 });
 
 test('ensureRunning short-circuits without spawning when the port is already open', async () => {

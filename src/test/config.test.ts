@@ -71,6 +71,22 @@ test('auto-launch is ON by default (opt-out)', () => {
   });
 });
 
+test('autoPort is true when ZESARUX_PORT is unset, false when set', () => {
+  withoutEnv(['ZESARUX_PORT'], () => {
+    assert.equal(loadConfig().zesarux.autoPort, true);
+  });
+  const saved = process.env.ZESARUX_PORT;
+  process.env.ZESARUX_PORT = '10005';
+  try {
+    const cfg = loadConfig();
+    assert.equal(cfg.zesarux.autoPort, false);
+    assert.equal(cfg.zesarux.port, 10005);
+  } finally {
+    if (saved === undefined) delete process.env.ZESARUX_PORT;
+    else process.env.ZESARUX_PORT = saved;
+  }
+});
+
 test('ZESARUX_AUTOLAUNCH=false disables auto-launch', () => {
   const saved = process.env.ZESARUX_AUTOLAUNCH;
   process.env.ZESARUX_AUTOLAUNCH = 'false';

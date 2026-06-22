@@ -364,6 +364,19 @@ export class ZRCPClient {
     return this.connected;
   }
 
+  /** The port this client connects to. */
+  getPort(): number {
+    return this.options.port;
+  }
+
+  /**
+   * Change the target ZRCP port. Only meaningful while disconnected — used by
+   * AUTO-mode port selection before the first connect.
+   */
+  setPort(port: number): void {
+    this.options.port = port;
+  }
+
   /**
    * Parse hex value from response
    */

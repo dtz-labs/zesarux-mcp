@@ -5,6 +5,12 @@
 export interface ZEsarUXConfig {
   host: string;
   port: number;
+  /**
+   * True when ZESARUX_PORT was NOT set, so the server may auto-select a port.
+   * In AUTO mode (auto-launch on) it then launches ZEsarUX on the first free
+   * port >= 10000, letting multiple MCP servers fan out to 10000, 10001, ...
+   */
+  autoPort: boolean;
   timeout: number;
   retryAttempts: number;
   autoReconnect: boolean;
@@ -60,6 +66,7 @@ export function loadConfig(): Config {
     zesarux: {
       host: getEnv('ZESARUX_HOST', 'localhost'),
       port: getEnvNumber('ZESARUX_PORT', 10000),
+      autoPort: process.env.ZESARUX_PORT === undefined,
       timeout: getEnvNumber('ZESARUX_TIMEOUT', 30000),
       retryAttempts: getEnvNumber('ZESARUX_RETRY_ATTEMPTS', 3),
       autoReconnect: getEnvBoolean('ZESARUX_AUTO_RECONNECT', true),

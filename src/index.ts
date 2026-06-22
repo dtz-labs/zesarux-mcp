@@ -27,7 +27,7 @@ import { loadConfig } from './config.js';
 import { Logger } from './logger.js';
 import { ZRCPClient } from './zrcp-client.js';
 import { ZRCPServerTools, EmulatorControl } from './tools.js';
-import { ZesaruxLauncher, bootstrapConnection, BootstrapDeps } from './launcher.js';
+import { ZesaruxLauncher, bootstrapConnection, BootstrapDeps, findFreePort } from './launcher.js';
 
 /**
  * Main ZEsarUX MCP Server class
@@ -123,6 +123,10 @@ class ZRCPServer {
   async start(): Promise<void> {
     this.logger.info('Starting ZEsarUX MCP Server...');
 
+    // AUTO mode: with no ZESARUX_PORT and auto-launch on, pick the first free
+    // port >= 10000 so several MCP servers each get their own ZEsarUX.
+    await this.resolveAutoPort();
+
     // Connect to ZEsarUX, auto-launching it first if it isn't reachable and
     // ZESARUX_AUTOLAUNCH is enabled.
     const connected = await bootstrapConnection(this.bootstrapDeps());
@@ -138,6 +142,27 @@ class ZRCPServer {
     await this.server.connect(transport);
 
     this.logger.info('ZEsarUX MCP Server running');
+  }
+
+  /**
+   * AUTO-mode port selection: when ZESARUX_PORT is unset and auto-launch is on,
+   * choose the first free port >= 10000 and point the client at it. This lets
+   * multiple MCP servers run side by side, each launching its own ZEsarUX on
+   * 10000, 10001, 10002, ... Set ZESARUX_PORT to pin a specific port instead
+   * (e.g. to attach to an already-running emulator).
+   */
+  private async resolveAutoPort(): Promise<void> {
+    const z = this.config.zesarux;
+    if (!z.autoPort || !z.autoLaunch) {
+      return;
+    }
+    const chosen = await findFreePort(z.host, 10000);
+    z.port = chosen;
+    this.zrcpClient.setPort(chosen);
+    this.logger.info(
+      `AUTO mode: selected first free ZRCP port ${chosen} ` +
+        '(set ZESARUX_PORT to pin a specific port).'
+    );
   }
 
   /**

@@ -152,6 +152,35 @@ export async function waitForPort(
   return false;
 }
 
+/** Options for findFreePort — isPortOpen is injectable for testing. */
+export interface FindFreePortOptions {
+  isPortOpen?: (host: string, port: number) => Promise<boolean>;
+  /** How many consecutive ports to probe before giving up. */
+  maxProbes?: number;
+}
+
+/**
+ * Find the first free port at or above `startPort` on `host` — i.e. the first
+ * port where nothing is currently listening. Used in AUTO mode (no ZESARUX_PORT)
+ * so each MCP server launches its own ZEsarUX on its own port (10000, 10001, …).
+ * If every probed port is busy, falls back to `startPort`.
+ */
+export async function findFreePort(
+  host: string,
+  startPort: number,
+  options: FindFreePortOptions = {}
+): Promise<number> {
+  const probe = options.isPortOpen ?? isPortOpen;
+  const maxProbes = options.maxProbes ?? 64;
+  for (let i = 0; i < maxProbes; i++) {
+    const port = startPort + i;
+    if (!(await probe(host, port))) {
+      return port; // nothing listening here -> free
+    }
+  }
+  return startPort;
+}
+
 /** Spawn ZEsarUX with stdio discarded — stdout MUST NOT corrupt the MCP stream. */
 function defaultSpawn(binary: string, args: string[]): ChildProcess {
   return spawn(binary, args, { stdio: 'ignore', detached: false });
