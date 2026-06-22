@@ -1,5 +1,5 @@
 {
-  "name": "zesarux-mcp",
+  "name": "@dtz-labs/zesarux-mcp",
   "version": "1.0.0",
   "description": "MCP server for ZEsarUX ZX Spectrum emulator using ZRCP protocol",
   "type": "module",
@@ -7,6 +7,9 @@
   "bin": {
     "zesarux-mcp": "dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
@@ -14,7 +17,8 @@
     "start": "node dist/index.js",
     "dev": "tsc && node dist/index.js",
     "test": "node --test dist/test/**/*.test.js",
-    "lint": "eslint src/**/*.ts"
+    "lint": "eslint src/**/*.ts",
+    "prepare": "tsc"
   },
   "keywords": [
     "mcp",
@@ -26,6 +30,17 @@
   ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dtz-labs/zesarux-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dtz-labs/zesarux-mcp/issues"
+  },
+  "homepage": "https://github.com/dtz-labs/zesarux-mcp#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4"
   },

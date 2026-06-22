@@ -1,0 +1,41 @@
+name: Publish to npm
+
+# Publishes @dtz-labs/zesarux-mcp when a version tag (vX.Y.Z) is pushed.
+# Uses npm Trusted Publishing (OIDC) — no NPM_TOKEN secret required.
+# One-time setup on npmjs.com: package Settings → Trusted Publisher → GitHub Actions
+#   Organization/User: dtz-labs   Repository: zesarux-mcp   Workflow: publish.yml
+# Note: the package must exist on npm before a trusted publisher can be configured,
+# so the FIRST release must be published manually once (see README), then tags
+# drive every release after that.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for OIDC trusted publishing + provenance
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      # Trusted Publishing requires npm >= 11.5.1
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish
+        run: npm publish --provenance --access public
