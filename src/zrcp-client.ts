@@ -68,12 +68,18 @@ export class ZRCPClient {
     }
 
     this.connectionPromise = new Promise((resolve, reject) => {
+      // Guards against settling the promise more than once: the first of
+      // connect/error/close/timeout wins. Without this, an 'error'/'close'
+      // before 'connect' left the promise pending forever and start() hung.
+      let settled = false;
+
       this.socket = createConnection(this.options.port, this.options.host);
 
       this.socket.on('connect', () => {
         this.logger.info(`Connected to ZEsarUX at ${this.options.host}:${this.options.port}`);
         this.connected = true;
         this.connectionPromise = null;
+        settled = true;
         resolve();
       });
 
@@ -89,6 +95,16 @@ export class ZRCPClient {
           this.responseResolver('');
           this.responseResolver = null;
         }
+        if (!settled) {
+          settled = true;
+          reject(
+            new ZRCPError(
+              ZRCPErrorCode.CONNECTION_FAILED,
+              `Failed to connect to ${this.options.host}:${this.options.port}: ${error.message}`,
+              error
+            )
+          );
+        }
       });
 
       this.socket.on('close', () => {
@@ -99,6 +115,15 @@ export class ZRCPClient {
           this.responseResolver('');
           this.responseResolver = null;
         }
+        if (!settled) {
+          settled = true;
+          reject(
+            new ZRCPError(
+              ZRCPErrorCode.CONNECTION_LOST,
+              `Connection to ${this.options.host}:${this.options.port} closed before it was established`
+            )
+          );
+        }
         if (this.options.autoReconnect) {
           this.scheduleReconnect();
         }
@@ -107,7 +132,10 @@ export class ZRCPClient {
       this.socket.on('timeout', () => {
         this.logger.error('ZRCP connection timeout');
         this.socket?.destroy();
-        reject(new ZRCPError(ZRCPErrorCode.TIMEOUT, 'Connection timeout'));
+        if (!settled) {
+          settled = true;
+          reject(new ZRCPError(ZRCPErrorCode.TIMEOUT, 'Connection timeout'));
+        }
       });
 
       // Set timeout
