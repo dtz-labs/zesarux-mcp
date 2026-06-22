@@ -47,6 +47,14 @@ export class ZRCPError extends Error {
  * ZRCP Client for communicating with ZEsarUX
  */
 export class ZRCPClient {
+  /**
+   * ZEsarUX terminates the welcome banner and every command response with
+   * this prompt (note the trailing space, no newline after it). It is NOT
+   * "ZRCP>" — that was an incorrect assumption that caused every command to
+   * hang until the read timeout fired.
+   */
+  private static readonly PROMPT = 'command> ';
+
   private socket: Socket | null = null;
   private connected: boolean = false;
   private responseBuffer: string = '';
@@ -183,29 +191,38 @@ export class ZRCPClient {
    * Handle incoming data from ZRCP
    */
   private handleData(data: Buffer): void {
-    const text = data.toString('utf8');
-    this.responseBuffer += text;
+    this.responseBuffer += data.toString('utf8');
 
-    // Check if we have a complete response (ends with prompt)
-    const promptEnd = this.responseBuffer.lastIndexOf('ZRCP>');
-    if (promptEnd !== -1) {
-      const response = this.responseBuffer.substring(0, promptEnd);
-      this.responseBuffer = this.responseBuffer.substring(promptEnd + 6);
+    const prompt = ZRCPClient.PROMPT;
 
-      // Extract the actual response (before the last prompt)
-      const lastPromptIndex = response.lastIndexOf('ZRCP>');
-      let actualResponse: string;
-      if (lastPromptIndex !== -1) {
-        actualResponse = response.substring(lastPromptIndex + 6);
-      } else {
-        actualResponse = response;
-      }
-
-      if (this.responseResolver) {
-        this.responseResolver(actualResponse.trim());
-        this.responseResolver = null;
-      }
+    // A complete response is everything received up to the next prompt.
+    const promptEnd = this.responseBuffer.lastIndexOf(prompt);
+    if (promptEnd === -1) {
+      return; // Prompt not seen yet — keep buffering.
     }
+
+    const response = this.responseBuffer.substring(0, promptEnd);
+    // Preserve anything received after the prompt (normally nothing) so a
+    // following response is not lost.
+    this.responseBuffer = this.responseBuffer.substring(promptEnd + prompt.length);
+
+    if (!this.responseResolver) {
+      // No command is awaiting a reply, so this is the connection's welcome
+      // banner (or other unsolicited output). Discard it — consuming it here
+      // keeps the buffer clean so the first real command is framed correctly.
+      return;
+    }
+
+    // If an earlier prompt is still embedded in the response (e.g. a stale
+    // banner that was buffered together with the reply), only the text after
+    // it belongs to this command.
+    const prevPrompt = response.lastIndexOf(prompt);
+    const actualResponse =
+      prevPrompt === -1 ? response : response.substring(prevPrompt + prompt.length);
+
+    const resolve = this.responseResolver;
+    this.responseResolver = null;
+    resolve(actualResponse.trim());
   }
 
   /**
