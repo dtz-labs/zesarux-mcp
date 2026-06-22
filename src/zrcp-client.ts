@@ -91,6 +91,13 @@ export class ZRCPClient {
   private onWelcome: (() => void) | null = null;
   private connectionPromise: Promise<void> | null = null;
   private reconnectTimeout: NodeJS.Timeout | null = null;
+  /**
+   * Set by disconnect() so the socket 'close' handler does NOT schedule an
+   * auto-reconnect. Without it, an intentional disconnect (e.g. killing an
+   * emulator we launched) would trigger reconnect attempts against a dead port.
+   * Reset to false at the start of every connect().
+   */
+  private intentionalClose: boolean = false;
 
   constructor(
     private options: ZRCPConnectionOptions,
@@ -104,6 +111,9 @@ export class ZRCPClient {
     if (this.connectionPromise) {
       return this.connectionPromise;
     }
+
+    // A fresh connect attempt clears any prior intentional-close latch.
+    this.intentionalClose = false;
 
     this.connectionPromise = new Promise((resolve, reject) => {
       // Guards against settling the promise more than once: the first of
@@ -178,7 +188,7 @@ export class ZRCPClient {
             )
           );
         }
-        if (this.options.autoReconnect) {
+        if (this.options.autoReconnect && !this.intentionalClose) {
           this.scheduleReconnect();
         }
       });
@@ -205,6 +215,8 @@ export class ZRCPClient {
    * Disconnect from ZEsarUX
    */
   disconnect(): void {
+    // Mark this as deliberate so the 'close' handler won't auto-reconnect.
+    this.intentionalClose = true;
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;

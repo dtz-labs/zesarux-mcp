@@ -292,6 +292,16 @@ export class ZesaruxLauncher {
   }
 
   /**
+   * True when this server spawned a ZEsarUX process that is still running.
+   * Used to decide whether a kill request should act (we only kill what we
+   * started — never an externally-launched emulator).
+   */
+  isManaged(): boolean {
+    const child = this.child;
+    return !!child && child.exitCode === null && child.signalCode === null;
+  }
+
+  /**
    * Terminate the ZEsarUX process we spawned (if any): SIGTERM, then SIGKILL
    * after a grace period if it hasn't exited. Resolves once the child is gone,
    * so callers can await it before process.exit(). No-op if we never spawned.

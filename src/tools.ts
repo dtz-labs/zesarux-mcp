@@ -4,9 +4,35 @@
  */
 
 import { Tool, CallToolRequest } from '@modelcontextprotocol/sdk/types.js';
-import { ZRCPClient } from './zrcp-client.js';
+import { ZRCPClient, ZRCPError, ZRCPErrorCode } from './zrcp-client.js';
 import { ZRCPCommands, createZRCPCommands } from './commands/index.js';
 import { Logger } from './logger.js';
+
+/** Result of a launch/kill emulator-process operation. */
+export interface EmulatorActionResult {
+  status: string;
+  message: string;
+  connected: boolean;
+  /** True when ZEsarUX is a process this server started (and may stop). */
+  managed: boolean;
+}
+
+/**
+ * Process-level control of the ZEsarUX emulator, injected by the server so the
+ * tool layer can start/stop the emulator and recover a lost connection without
+ * depending on the launcher directly.
+ */
+export interface EmulatorControl {
+  /** Start ZEsarUX (if not already reachable) and connect. */
+  launch(): Promise<EmulatorActionResult>;
+  /** Stop ZEsarUX, but only if this server started it. */
+  kill(): Promise<EmulatorActionResult>;
+  /**
+   * Try to restore a lost ZRCP connection: relaunch ZEsarUX if auto-launch is
+   * enabled and it isn't running, then reconnect. Resolves true once connected.
+   */
+  recoverConnection(): Promise<boolean>;
+}
 
 /**
  * Registry of all available MCP tools with their handlers
@@ -15,7 +41,11 @@ export class ZRCPServerTools {
   private tools: Map<string, Tool>;
   private zrcp: ZRCPCommands;
 
-  constructor(private zrcpClient: ZRCPClient, private logger: Logger) {
+  constructor(
+    private zrcpClient: ZRCPClient,
+    private logger: Logger,
+    private emulator?: EmulatorControl
+  ) {
     this.tools = new Map();
     this.zrcp = createZRCPCommands(zrcpClient);
     this.registerAllTools();
@@ -45,15 +75,43 @@ export class ZRCPServerTools {
     this.logger.info(`Tool call: ${toolName}`, args);
 
     try {
-      const result = await this.executeTool(toolName, args);
-      return result;
+      return await this.executeTool(toolName, args);
     } catch (error) {
-      this.logger.error(`Tool error: ${toolName}`, error);
-      if (error instanceof Error) {
-        return JSON.stringify({ error: error.message });
+      // If the failure was a lost/absent ZRCP connection, try once to recover
+      // (relaunch ZEsarUX when auto-launch is on, then reconnect) and re-run.
+      if (this.emulator && this.isConnectionError(error)) {
+        this.logger.warn(
+          `Tool '${toolName}' failed with a connection error; attempting to recover...`
+        );
+        const recovered = await this.emulator.recoverConnection().catch(() => false);
+        if (recovered) {
+          this.logger.info('Connection recovered; retrying the tool call.');
+          try {
+            return await this.executeTool(toolName, args);
+          } catch (retryError) {
+            return this.formatToolError(toolName, retryError);
+          }
+        }
       }
-      return JSON.stringify({ error: 'Unknown error' });
+      return this.formatToolError(toolName, error);
     }
+  }
+
+  /** Whether an error indicates the ZRCP connection is down (not just a slow command). */
+  private isConnectionError(error: unknown): boolean {
+    return (
+      error instanceof ZRCPError &&
+      (error.code === ZRCPErrorCode.CONNECTION_FAILED ||
+        error.code === ZRCPErrorCode.CONNECTION_LOST)
+    );
+  }
+
+  private formatToolError(toolName: string, error: unknown): string {
+    this.logger.error(`Tool error: ${toolName}`, error);
+    if (error instanceof Error) {
+      return JSON.stringify({ error: error.message });
+    }
+    return JSON.stringify({ error: 'Unknown error' });
   }
 
   /**
@@ -61,6 +119,19 @@ export class ZRCPServerTools {
    */
   private async executeTool(name: string, args: any): Promise<string> {
     switch (name) {
+      // 0. Emulator process control
+      case 'launch_emulator':
+        if (!this.emulator) {
+          return JSON.stringify({ error: 'Emulator process control is not available in this context.' });
+        }
+        return JSON.stringify(await this.emulator.launch());
+
+      case 'kill_emulator':
+        if (!this.emulator) {
+          return JSON.stringify({ error: 'Emulator process control is not available in this context.' });
+        }
+        return JSON.stringify(await this.emulator.kill());
+
       // 1. Machine Control
       case 'set_machine':
         return await this.zrcp.setMachine(args.machine);
@@ -281,6 +352,29 @@ export class ZRCPServerTools {
    * Register all tools
    */
   private registerAllTools(): void {
+    // 0. Emulator process control (only when the server injected a controller)
+    if (this.emulator) {
+      this.registerTool({
+        name: 'launch_emulator',
+        description:
+          'Start the ZEsarUX emulator process and connect to it. If ZEsarUX is already running/reachable, just connects. Locates the binary automatically (or ZESARUX_PATH) and starts it with the ZRCP remote protocol enabled.',
+        inputSchema: {
+          type: 'object',
+          properties: {}
+        }
+      });
+
+      this.registerTool({
+        name: 'kill_emulator',
+        description:
+          'Stop the ZEsarUX emulator — but ONLY if this server started it. An externally-launched ZEsarUX is left untouched (you must stop it yourself).',
+        inputSchema: {
+          type: 'object',
+          properties: {}
+        }
+      });
+    }
+
     // 1. Machine Control
     this.registerTool({
       name: 'set_machine',
