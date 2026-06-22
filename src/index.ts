@@ -20,6 +20,8 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import { loadConfig } from './config.js';
 import { Logger } from './logger.js';
@@ -161,8 +163,25 @@ async function main(): Promise<void> {
   await server.start();
 }
 
+/**
+ * True when this file is the process entry point. Compares real paths so it
+ * still works when launched through a symlink: npm/npx run the bin via
+ * node_modules/.bin/<name>, so process.argv[1] is the symlink, not this file.
+ * The naive `import.meta.url === file://${process.argv[1]}` check failed there,
+ * leaving the server silently un-started (MCP client saw -32000 Connection closed).
+ */
+function isMainModule(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
 // Start the server if this is the main module
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule()) {
   main().catch((error) => {
     console.error('Failed to start server:', error);
     process.exit(1);
