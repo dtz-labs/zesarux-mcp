@@ -50,39 +50,49 @@ zesarux-mcp/
 
 ## ZRCP Protocol Mapping
 
-| MCP Tool | ZRCP Command | Description |
-|----------|--------------|-------------|
-| `set_machine` | `SETMACHINE` | Set emulated machine |
-| `reset_machine` | `RESET`, `RESET_HARD` | Reset emulator |
-| `peek` | `MEMPEEK`, `ROMPEEK`, `DIVMMCPEEK`, `ZXUNOFLASHPEEK`, `FILEPEEK` | Read memory |
-| `poke` | `MEMPOKE`, `DIVMMCPOKE`, `FILEPOKE` | Write memory |
-| `hexdump` | `MEMHEXDUMP`, `ROMHEXDUMP`, etc. | Display memory |
-| `get_registers` | `PRINTREGS` | Get CPU registers |
-| `set_register` | `SETREG` | Set register value |
-| `cpu_step` | `STEP`, `STEPOVER` | Single-step CPU |
-| `cpu_history` | `GETCPUEXECUTIONHISTORY` | Get execution history |
-| `disassemble` | `MEMDISAS`, `ROMDISAS`, etc. | Disassemble code |
-| `list_breakpoints` | `LISTBREAKPOINTS` | List breakpoints |
-| `set_breakpoint` | `BREAKPOINT` | Set breakpoint |
-| `clear_breakpoint` | `CLEARBREAKPOINT` | Remove breakpoint |
-| `read_port` | `PORTIN` | Read I/O port |
-| `write_port` | `PORTOUT` | Write I/O port |
-| `load_file` | `LOADFILE`, `LOADTAPE`, `LOADDISK`, etc. | Load file |
-| `tape_control` | `TAPEPLAY`, `TAPESTOP`, `TAPEFILE` | Control tape |
-| `save_snapshot` | `SAVESNAPSHOT` | Save snapshot |
-| `load_snapshot` | `LOADSNAPSHOT` | Load snapshot |
-| `snapshot_inram` | `SAVESNAPSHOTINRAM`, `LOADSNAPSHOTINRAM`, etc. | RAM snapshots |
-| `save_screen` | `SAVEVIDEO` | Save screen |
-| `get_screen` | `GETVIDEOSCR`, `GETVIDEOATTRIBUTES`, `GETVIDEOPIXELS` | Get screen data |
-| `send_key` | `KEY`, `KEYPRESS`, `KEYRELEASE` | Send key |
-| `send_keys` | Multiple `KEY` calls | Send key sequence |
-| `assemble` | `ASSEMBLE` | Assemble instruction |
-| `code_coverage` | `GETCODECOVERAGE`, `RESETCODECOVERAGE` | Code coverage |
-| `cpu_transaction_log` | `STARTTRANSACTIONLOG`, `STOPTRANSACTIONLOG`, etc. | Transaction log |
-| `extended_stack` | `GETEXTENDEDSIGNEDSTACK` | Extended stack |
-| `ay_player` | `AYPLAY`, `AYSTOP`, `AYLOADFILE`, etc. | AY player |
-| `mmc_reload` | `MMCRELOAD` | Reload MMC |
-| `get_emulator_info` | `INFO`, `GETVERSION`, `GETMACHINE`, `GETFEATURES` | Emulator info |
-| `get_tstates` | `GETTSTATES`, `RESETTSTATES` | T-state counters |
+ZRCP commands are hyphenated-lowercase (e.g. `set-machine`, `read-memory`,
+`get-registers`). The table below shows the **real** command(s) each MCP tool
+sends, as implemented in `src/commands/index.ts`. Tools do not always map 1:1 to
+a single verb — some issue several commands, switch modes first, or synthesise a
+response because no direct command exists (e.g. `read_port` evaluates an
+expression, `get_screen` falls back to `save-screen`).
+
+All commands were verified against a live ZEsarUX 13.0; the authoritative list is
+obtainable at runtime via the ZRCP `help` command.
+
+| MCP Tool | ZRCP Command(s) | Description |
+|----------|-----------------|-------------|
+| `set_machine` | `set-machine` | Set emulated machine |
+| `reset_machine` | `reset-cpu`, `hard-reset-cpu` | Reset CPU (hard reset on request) |
+| `peek` | `read-memory` (preceded by `set-memory-zone` for a named zone) | Read memory |
+| `poke` | `write-memory` (preceded by `set-memory-zone` for a named zone) | Write memory |
+| `hexdump` | `hexdump` (preceded by `set-memory-zone` for a named zone) | Display memory |
+| `get_registers` | `get-registers` | Get CPU registers |
+| `set_register` | `set-register` (`REG=VALUEH`) | Set register value |
+| `cpu_step` | `enter-cpu-step`, then `cpu-step` / `cpu-step-over` | Single-step CPU |
+| `cpu_history` | `cpu-history` (`get-pc` / `get` / `get-extended` / `get-size` / `enabled` / `started` / `clear`) | Get/manage execution history |
+| `disassemble` | `disassemble` (`evaluate PC` first when address is `PC`) | Disassemble code |
+| `list_breakpoints` | `get-breakpoints` | List breakpoints |
+| `set_breakpoint` | `enable-breakpoints`, then `set-breakpoint` or `set-membreakpoint` (+ optional `set-breakpointaction`, `set-breakpointpasscount`, `disable-breakpoint`) | Set breakpoint |
+| `clear_breakpoint` | `disable-breakpoint` (or `clear-membreakpoints` for all memory watches) | Clear breakpoint slot |
+| `read_port` | `evaluate IN(port)` | Read I/O port (no direct read-port command) |
+| `write_port` | `write-port` | Write I/O port |
+| `load_file` | `smartload` / `snapshot-load` / `realtape-open` | Load file (auto / snapshot / tape) |
+| `tape_control` | `realtape-open` (insert only; transport not exposed over ZRCP) | Insert a real tape |
+| `save_snapshot` | `snapshot-save` | Save snapshot (format from extension) |
+| `load_snapshot` | `snapshot-load` | Load snapshot |
+| `snapshot_inram` | `snapshot-inram-load`, `snapshot-inram-get-index` | In-RAM (Time Machine) snapshots (load / get-index only) |
+| `save_screen` | `save-screen` | Save screen to a host file (scr/bmp/pbm) |
+| `get_screen` | `save-screen` (fallback) | No pixel streaming over ZRCP; dumps to host file and returns the path |
+| `send_key` | `send-keys-ascii` (taps) / `send-keys-event` (press/release) | Send key |
+| `send_keys` | `send-keys-ascii` (one ASCII code per char) | Send key sequence |
+| `assemble` | `assemble` | Assemble instruction |
+| `code_coverage` | `cpu-code-coverage` (`enabled` / `get` / `clear`) | Code coverage |
+| `cpu_transaction_log` | `cpu-transaction-log` | Transaction log |
+| `extended_stack` | `extended-stack get` | Extended stack |
+| `ay_player` | `ayplayer` (subcommand, optional parameter) | AY player |
+| `mmc_reload` | `mmc-reload` | Reload MMC |
+| `get_emulator_info` | `get-version`, `get-current-machine`, `get-os`, `get-buildnumber`, `get-cpu-core-name` (combined per `details`) | Emulator info |
+| `get_tstates` | `get-tstates` (or `reset-tstates-partial` + `get-tstates-partial`) | T-state counters |
 
 See [SPEC.md](SPEC.md) for the full specification including all tools and their parameters.

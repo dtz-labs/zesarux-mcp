@@ -10,6 +10,66 @@ MCP server for [ZEsarUX ZX Spectrum emulator](https://github.com/chernandezba/ze
 
 ## Quick Start
 
+Each client launches the server over stdio via `npx` — no clone or build needed.
+The server then connects to ZEsarUX on ZRCP port 10000 (or auto-launches it if
+`ZESARUX_AUTOLAUNCH=true`). Pick your client below; you'll still need ZEsarUX
+installed and running — see [Installation](#installation).
+
+### Claude Code
+
+Register the server with one command:
+```bash
+claude mcp add zesarux -- npx -y @dtz-labs/zesarux-mcp
+```
+
+To have the server auto-launch ZEsarUX for you, add an env var:
+```bash
+claude mcp add zesarux --env ZESARUX_AUTOLAUNCH=true -- npx -y @dtz-labs/zesarux-mcp
+```
+
+### Claude Desktop
+
+Edit `claude_desktop_config.json` (macOS:
+`~/Library/Application Support/Claude/claude_desktop_config.json`; Windows:
+`%APPDATA%\Claude\claude_desktop_config.json`), then restart Claude Desktop:
+```json
+{
+  "mcpServers": {
+    "zesarux": {
+      "command": "npx",
+      "args": ["-y", "@dtz-labs/zesarux-mcp"]
+    }
+  }
+}
+```
+
+### Codex
+
+Add to `~/.codex/config.toml`:
+```toml
+[mcp_servers.zesarux]
+command = "npx"
+args = ["-y", "@dtz-labs/zesarux-mcp"]
+```
+
+### Opencode
+
+Add to `opencode.json` (project) or `~/.config/opencode/opencode.json` (global):
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "zesarux": {
+      "type": "local",
+      "command": ["npx", "-y", "@dtz-labs/zesarux-mcp"],
+      "enabled": true
+    }
+  }
+}
+```
+
+## Installation
+
 ### 1. Install ZEsarUX
 
 **macOS:**
@@ -34,15 +94,27 @@ sudo apt-get install zesarux
 
 **Or download from:** [ZEsarUX releases](https://github.com/chernandezba/zesarux/releases)
 
+For Windows, compiling from source, and enabling ZRCP via the config file, see the
+full [Installation & Configuration](docs/installation.md) guide.
+
 ### 2. Start ZEsarUX with ZRCP
 
 ```bash
 zesarux --enable-remoteprotocol --remoteprotocol-port 10000
 ```
 
+Or let the server start it for you — set `ZESARUX_AUTOLAUNCH=true` and skip this
+step (see [Auto-launching ZEsarUX](#auto-launching-zesarux) below).
+
 ### 3. Install the MCP Server
 
-The server is published to npm as [`@dtz-labs/zesarux-mcp`](https://www.npmjs.com/package/@dtz-labs/zesarux-mcp) — no clone or build needed. Your MCP client launches it on demand via `npx`; nothing to install globally.
+The server is published to npm as [`@dtz-labs/zesarux-mcp`](https://www.npmjs.com/package/@dtz-labs/zesarux-mcp).
+Your MCP client launches it on demand via `npx` (see [Quick Start](#quick-start)),
+so nothing needs installing. To have it on your `PATH` as `zesarux-mcp`, install
+it globally:
+```bash
+npm install -g @dtz-labs/zesarux-mcp
+```
 
 <details>
 <summary>From source (for development)</summary>
@@ -57,46 +129,7 @@ npm run build   # produces dist/index.js
 Then point your config at `"command": "node", "args": ["/absolute/path/to/zesarux-mcp/dist/index.js"]`.
 </details>
 
-### 4. Configure your MCP client
-
-**Claude Code** — one command:
-```bash
-claude mcp add zesarux -- npx -y @dtz-labs/zesarux-mcp
-```
-
-…or commit a project-scoped `.mcp.json` to your repo:
-```json
-{
-  "mcpServers": {
-    "zesarux": {
-      "command": "npx",
-      "args": ["-y", "@dtz-labs/zesarux-mcp"],
-      "env": {
-        "ZESARUX_HOST": "localhost",
-        "ZESARUX_PORT": "10000",
-        "LOG_LEVEL": "info"
-      }
-    }
-  }
-}
-```
-
-**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-```json
-{
-  "mcpServers": {
-    "zesarux": {
-      "command": "npx",
-      "args": ["-y", "@dtz-labs/zesarux-mcp"],
-      "env": { "ZESARUX_HOST": "localhost", "ZESARUX_PORT": "10000" }
-    }
-  }
-}
-```
-
-Restart Claude and the tools will be available.
-
-#### Environment variables
+### Environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -122,6 +155,12 @@ ZEsarUX you started yourself is left untouched. See
 [Installation & Configuration](docs/installation.md#auto-launching-zesarux) for
 binary discovery order and headless use.
 
+You can also control the emulator process at runtime with the **`launch_emulator`**
+and **`kill_emulator`** tools (the latter only stops an emulator the server
+started). And if a tool call fails because the connection dropped, the server
+will — with `ZESARUX_AUTOLAUNCH=true` — try once to relaunch ZEsarUX and reconnect
+before retrying the call.
+
 ## Documentation
 
 - **[Documentation index](docs/README.md)** - Start here
@@ -138,7 +177,7 @@ binary discovery order and headless use.
 ```json
 // Reset and set machine
 {"name": "reset_machine"}
-{"name": "set_machine", "arguments": {"machine": "spectrum128"}}
+{"name": "set_machine", "arguments": {"machine": "128k"}}
 
 // Read/write memory
 {"name": "peek", "arguments": {"address": "4000", "length": 256}}
@@ -146,7 +185,7 @@ binary discovery order and headless use.
 
 // Debugging
 {"name": "get_registers"}
-{"name": "set_breakpoint", "arguments": {"address": "8000"}}
+{"name": "set_breakpoint", "arguments": {"index": 1, "type": "execute", "address": "8000"}}
 
 // Load tape
 {"name": "load_file", "arguments": {"filename": "/path/game.tap"}}
