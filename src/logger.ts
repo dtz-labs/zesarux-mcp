@@ -24,15 +24,19 @@ export class Logger {
     return `${prefix} ${message} ${args.length > 0 ? JSON.stringify(args) : ''}`;
   }
 
+  // NOTE: this is a stdio MCP server — stdout is reserved exclusively for the
+  // JSON-RPC stream. ALL log output must go to stderr (console.error), never
+  // stdout (console.log/info/debug), or the protocol stream gets corrupted.
+
   debug(message: string, ...args: unknown[]): void {
     if (this.shouldLog('debug')) {
-      console.debug(this.formatMessage('debug', message, ...args));
+      console.error(this.formatMessage('debug', message, ...args));
     }
   }
 
   info(message: string, ...args: unknown[]): void {
     if (this.shouldLog('info')) {
-      console.info(this.formatMessage('info', message, ...args));
+      console.error(this.formatMessage('info', message, ...args));
     }
   }
 
