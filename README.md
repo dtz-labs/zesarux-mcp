@@ -15,7 +15,17 @@ MCP server for [ZEsarUX ZX Spectrum emulator](https://github.com/chernandezba/ze
 **macOS:**
 ```bash
 brew install zesarux
+xattr -dr com.apple.quarantine /Applications/zesarux.app
 ```
+
+> **Why the second command?** macOS Gatekeeper tags any app that wasn't downloaded
+> through the App Store (or signed/notarized by an identified developer) with a
+> `com.apple.quarantine` extended attribute. ZEsarUX isn't notarized, so the first
+> time you launch it Gatekeeper refuses to open it ("can't be opened because Apple
+> cannot check it for malicious software"). `xattr -dr` recursively strips that
+> attribute from the app bundle, telling Gatekeeper to trust it. This is needed
+> because the Homebrew cask drops the `.app` into `/Applications` but cannot clear
+> the quarantine flag for you.
 
 **Linux:**
 ```bash

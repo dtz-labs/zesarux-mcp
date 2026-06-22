@@ -9,7 +9,26 @@ How to install ZEsarUX, install the MCP server, and configure it.
 **Using Homebrew:**
 ```bash
 brew install zesarux
+xattr -dr com.apple.quarantine /Applications/zesarux.app
 ```
+
+> **Why the `xattr` step is required**
+>
+> macOS Gatekeeper attaches a `com.apple.quarantine` extended attribute to any
+> application that didn't come from the App Store and isn't signed/notarized by an
+> Apple-identified developer. ZEsarUX is distributed unsigned, so on first launch
+> Gatekeeper blocks it with *"zesarux.app can't be opened because Apple cannot
+> check it for malicious software."*
+>
+> The Homebrew cask installs the `.app` bundle into `/Applications` but **does not
+> clear the quarantine flag** — so the app is in place yet refuses to run. The
+> `xattr -dr com.apple.quarantine` command recursively (`-r`) deletes (`-d`) that
+> attribute from the bundle, which tells Gatekeeper to trust the app and lets it
+> launch normally. You only need to run it once, right after install.
+>
+> (Alternatively you can right-click the app → **Open** the first time, or approve
+> it under *System Settings → Privacy & Security*, but the `xattr` command is the
+> scriptable, one-shot equivalent.)
 
 **Manual installation:**
 1. Download from [ZEsarUX releases](https://github.com/chernandezba/zesarux/releases)
