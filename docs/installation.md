@@ -109,7 +109,7 @@ Configuration is done via environment variables:
 | `ZESARUX_PORT` | `10000` | ZRCP port |
 | `ZESARUX_TIMEOUT` | `30000` | Connection timeout (ms) |
 | `ZESARUX_AUTO_RECONNECT` | `true` | Auto-reconnect on disconnect |
-| `ZESARUX_AUTOLAUNCH` | `false` | Launch ZEsarUX automatically when it isn't reachable |
+| `ZESARUX_AUTOLAUNCH` | `true` | Launch ZEsarUX automatically when it isn't reachable (set `false` to opt out) |
 | `ZESARUX_PATH` | _(auto-detected)_ | Explicit path to the ZEsarUX binary |
 | `ZESARUX_ARGS` | _(none)_ | Extra args appended when launching |
 | `ZESARUX_LAUNCH_TIMEOUT` | `20000` | Time to wait for the ZRCP port after launching (ms) |
@@ -118,13 +118,15 @@ Configuration is done via environment variables:
 
 ## Auto-launching ZEsarUX
 
-Instead of starting ZEsarUX yourself, you can let the MCP server do it. Set:
+By default the MCP server starts ZEsarUX for you — you don't have to launch it
+yourself. To opt out (only ever connect to a ZEsarUX you started), set:
 
 ```bash
-ZESARUX_AUTOLAUNCH=true
+ZESARUX_AUTOLAUNCH=false
 ```
 
-When the server starts and ZEsarUX is **not** already reachable, it will:
+When the server starts and ZEsarUX is **not** already reachable (and auto-launch
+is left enabled), it will:
 
 1. Locate a local ZEsarUX binary (see discovery order below).
 2. Launch it with `--enable-remoteprotocol --remoteprotocol-port <ZESARUX_PORT>`,

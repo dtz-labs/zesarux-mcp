@@ -11,9 +11,9 @@ MCP server for [ZEsarUX ZX Spectrum emulator](https://github.com/chernandezba/ze
 ## Quick Start
 
 Each client launches the server over stdio via `npx` — no clone or build needed.
-The server then connects to ZEsarUX on ZRCP port 10000 (or auto-launches it if
-`ZESARUX_AUTOLAUNCH=true`). Pick your client below; you'll still need ZEsarUX
-installed and running — see [Installation](#installation).
+The server then connects to ZEsarUX on ZRCP port 10000, auto-launching it for you
+if nothing is listening there (on by default). Pick your client below; you'll
+still need ZEsarUX installed — see [Installation](#installation).
 
 ### Claude Code
 
@@ -22,9 +22,10 @@ Register the server with one command:
 claude mcp add zesarux -- npx -y @dtz-labs/zesarux-mcp
 ```
 
-To have the server auto-launch ZEsarUX for you, add an env var:
+Auto-launch is on by default. To disable it (only connect to a ZEsarUX you start
+yourself), set the env var:
 ```bash
-claude mcp add zesarux --env ZESARUX_AUTOLAUNCH=true -- npx -y @dtz-labs/zesarux-mcp
+claude mcp add zesarux --env ZESARUX_AUTOLAUNCH=false -- npx -y @dtz-labs/zesarux-mcp
 ```
 
 ### Claude Desktop
@@ -103,8 +104,8 @@ full [Installation & Configuration](docs/installation.md) guide.
 zesarux --enable-remoteprotocol --remoteprotocol-port 10000
 ```
 
-Or let the server start it for you — set `ZESARUX_AUTOLAUNCH=true` and skip this
-step (see [Auto-launching ZEsarUX](#auto-launching-zesarux) below).
+Or skip this step — the server auto-launches ZEsarUX for you by default (see
+[Auto-launching ZEsarUX](#auto-launching-zesarux) below).
 
 ### 3. Install the MCP Server
 
@@ -139,27 +140,27 @@ Then point your config at `"command": "node", "args": ["/absolute/path/to/zesaru
 | `ZESARUX_TIMEOUT` | `30000` | ZRCP request timeout, ms |
 | `ZESARUX_RETRY_ATTEMPTS` | `3` | Connection retry attempts |
 | `ZESARUX_AUTO_RECONNECT` | `true` | Reconnect automatically if the link drops |
-| `ZESARUX_AUTOLAUNCH` | `false` | Start ZEsarUX automatically if it isn't reachable |
+| `ZESARUX_AUTOLAUNCH` | `true` | Start ZEsarUX automatically if it isn't reachable (set `false` to opt out) |
 | `ZESARUX_PATH` | _(auto-detected)_ | Explicit path to the ZEsarUX binary |
 | `ZESARUX_ARGS` | _(none)_ | Extra args appended when launching (e.g. `--vo null --ao null` for headless) |
 | `ZESARUX_LAUNCH_TIMEOUT` | `20000` | How long to wait for the ZRCP port after launching, ms |
 
 ### Auto-launching ZEsarUX
 
-By default the server only connects to a ZEsarUX you started yourself. Set
-`ZESARUX_AUTOLAUNCH=true` and, when ZEsarUX isn't reachable on startup, the
-server will find a local ZEsarUX binary, launch it with
-`--enable-remoteprotocol --remoteprotocol-port <port>`, wait for the port, then
-connect. An emulator the server launched is terminated when the server stops; a
-ZEsarUX you started yourself is left untouched. See
+By default, when ZEsarUX isn't reachable on startup the server finds a local
+ZEsarUX binary, launches it with `--enable-remoteprotocol --remoteprotocol-port
+<port>`, waits for the port, then connects. Set `ZESARUX_AUTOLAUNCH=false` to opt
+out (only connect to a ZEsarUX you started yourself). An emulator the server
+launched is terminated when the server stops; a ZEsarUX you started yourself is
+left untouched. See
 [Installation & Configuration](docs/installation.md#auto-launching-zesarux) for
 binary discovery order and headless use.
 
 You can also control the emulator process at runtime with the **`launch_emulator`**
 and **`kill_emulator`** tools (the latter only stops an emulator the server
 started). And if a tool call fails because the connection dropped, the server
-will — with `ZESARUX_AUTOLAUNCH=true` — try once to relaunch ZEsarUX and reconnect
-before retrying the call.
+will — unless `ZESARUX_AUTOLAUNCH=false` — try once to relaunch ZEsarUX and
+reconnect before retrying the call.
 
 ## Documentation
 

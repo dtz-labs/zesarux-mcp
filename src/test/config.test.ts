@@ -61,21 +61,21 @@ test('loadConfig parses ZESARUX_AUTO_RECONNECT=false as a boolean', () => {
   }
 });
 
-test('auto-launch is OFF by default (opt-in)', () => {
+test('auto-launch is ON by default (opt-out)', () => {
   withoutEnv(['ZESARUX_AUTOLAUNCH'], () => {
     const cfg = loadConfig();
-    assert.equal(cfg.zesarux.autoLaunch, false);
+    assert.equal(cfg.zesarux.autoLaunch, true);
     assert.equal(cfg.zesarux.launchTimeout, 20000);
     assert.deepEqual(cfg.zesarux.launchArgs, []);
     assert.equal(cfg.zesarux.binaryPath, undefined);
   });
 });
 
-test('ZESARUX_AUTOLAUNCH=true enables auto-launch', () => {
+test('ZESARUX_AUTOLAUNCH=false disables auto-launch', () => {
   const saved = process.env.ZESARUX_AUTOLAUNCH;
-  process.env.ZESARUX_AUTOLAUNCH = 'true';
+  process.env.ZESARUX_AUTOLAUNCH = 'false';
   try {
-    assert.equal(loadConfig().zesarux.autoLaunch, true);
+    assert.equal(loadConfig().zesarux.autoLaunch, false);
   } finally {
     if (saved === undefined) delete process.env.ZESARUX_AUTOLAUNCH;
     else process.env.ZESARUX_AUTOLAUNCH = saved;

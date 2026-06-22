@@ -9,12 +9,13 @@
 - Check that the port matches (`ZESARUX_PORT`)
 - Verify firewall settings
 - Check if ZEsarUX is listening: `netstat -an | grep 10000`
-- Let the server start ZEsarUX for you: set `ZESARUX_AUTOLAUNCH=true` (see
+- The server starts ZEsarUX for you by default (auto-launch); if you disabled it,
+  re-enable by unsetting `ZESARUX_AUTOLAUNCH` or setting it to `true` (see
   [Auto-launching ZEsarUX](installation.md#auto-launching-zesarux))
 
 ## Auto-launch didn't start ZEsarUX
 
-**Problem:** `ZESARUX_AUTOLAUNCH=true` but ZEsarUX still isn't reached
+**Problem:** auto-launch is enabled (the default) but ZEsarUX still isn't reached
 
 **Solutions:**
 - The binary wasn't found — set `ZESARUX_PATH` to the ZEsarUX executable

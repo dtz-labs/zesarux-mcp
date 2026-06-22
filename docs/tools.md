@@ -459,7 +459,7 @@ Reads the T-state counter via ZRCP `get-tstates`. If `reset: true`, resets and r
 
 ## Emulator Process Control
 
-These tools manage the ZEsarUX **process** itself (not the emulated machine). They complement the opt-in `ZESARUX_AUTOLAUNCH` startup behavior: you can start and stop the emulator on demand at runtime.
+These tools manage the ZEsarUX **process** itself (not the emulated machine). They complement the `ZESARUX_AUTOLAUNCH` startup behavior (on by default): you can start and stop the emulator on demand at runtime.
 
 ### Launch Emulator
 ```json
