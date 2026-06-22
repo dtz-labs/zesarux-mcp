@@ -12,6 +12,25 @@ export interface ZRCPResponse {
   error?: string;
 }
 
+/**
+ * Parsed CPU registers from a `get-registers` response.
+ *
+ * `get-registers` returns ONE space-separated line. Numeric KEY=HEX tokens
+ * become `number` fields (and live on the index signature). The flag tokens
+ * F=/F'= are FLAG STRINGS (e.g. "-Z-H3P--"), kept separately so callers never
+ * see NaN. The trailing tokens IM1 / IFF-- / VPS: 0 / MMU=... are non-register
+ * metadata surfaced under dedicated keys.
+ */
+export interface ParsedRegisters {
+  [reg: string]: number | string | undefined;
+  flags?: string;     // F=  flag string,  e.g. "-Z-H3P--"
+  flagsAlt?: string;  // F'= flag string,  e.g. "-Z---P--"
+  im?: string;        // interrupt mode token value, e.g. "1" from "IM1"
+  iff?: string;       // IFF token value, e.g. "--" from "IFF--"
+  vps?: number;       // "VPS: 0" -> 0
+  mmu?: string;       // raw MMU string
+}
+
 export interface ZRCPConnectionOptions {
   host: string;
   port: number;
@@ -342,42 +361,101 @@ export class ZRCPClient {
   }
 
   /**
-   * Parse memory dump response
+   * Parse the raw response of a `read-memory address length` command into an
+   * array of byte values.
+   *
+   * ZEsarUX returns a bare, contiguous hex string with NO address column, NO
+   * spaces and NO ascii — two hex chars per byte. Examples:
+   *   read-memory 16384 8 -> "0000000000000000"  (8 zero bytes)
+   *   read-memory 16384 2 -> "ff01"              ([255, 1])
    */
-  parseMemoryDump(response: string): { address: number; bytes: number[]; ascii: string }[] {
-    const lines = response.split('\n').filter(line => line.trim());
-    const result: { address: number; bytes: number[]; ascii: string }[] = [];
-
-    for (const line of lines) {
-      // Expected format: "XXXX: YY YY YY YY ...  ASCII"
-      const match = line.match(/^([0-9A-Fa-f]+):\s+([0-9A-Fa-f\s]+)\s+(.*)$/);
-      if (match) {
-        const address = parseInt(match[1], 16);
-        const bytesStr = match[2].trim();
-        const bytes = bytesStr.split(/\s+/).map(b => parseInt(b, 16));
-        const ascii = match[3] || '';
-        result.push({ address, bytes, ascii });
-      }
+  parseReadMemory(response: string): number[] {
+    const hex = response.replace(/\s+/g, '');
+    if (hex.length === 0) {
+      return [];
     }
-
-    return result;
+    if (!/^[0-9a-fA-F]+$/.test(hex)) {
+      throw new ZRCPError(
+        ZRCPErrorCode.INVALID_RESPONSE,
+        `read-memory returned non-hex data: ${response}`
+      );
+    }
+    if (hex.length % 2 !== 0) {
+      throw new ZRCPError(
+        ZRCPErrorCode.INVALID_RESPONSE,
+        `read-memory returned an odd number of hex digits: ${response}`
+      );
+    }
+    const bytes: number[] = [];
+    for (let i = 0; i < hex.length; i += 2) {
+      bytes.push(parseInt(hex.substr(i, 2), 16));
+    }
+    return bytes;
   }
 
   /**
-   * Parse register values from response
+   * Parse register values from a `get-registers` (alias `gr`) response.
+   *
+   * Input is a SINGLE line, e.g.:
+   *   PC=0038 SP=ff46 AF=005c ... I=3f R=23  F=-Z-H3P-- F'=-Z---P-- MEMPTR=5c3c
+   *   IM1 IFF-- VPS: 0 MMU=00000000000000000000000000000000
+   * Most tokens are KEY=HEX (parsed to number). F=/F'= are flag STRINGS;
+   * IM1/IFF--/VPS:/MMU= are surfaced under dedicated keys. See ParsedRegisters.
    */
-  parseRegisters(response: string): Record<string, number> {
-    const registers: Record<string, number> = {};
-    const lines = response.split('\n');
+  parseRegisters(response: string): ParsedRegisters {
+    const registers: ParsedRegisters = {};
+    const tokens = response.replace(/\s+/g, ' ').trim().split(' ');
 
-    for (const line of lines) {
-      // Expected formats:
-      // "AF=XXXX"
-      // "BC=XXXX"
-      // Or table format
-      const match = line.match(/([A-Za-z'0-9]+)=([0-9A-Fa-f]+)/i);
-      if (match) {
-        registers[match[1]] = parseInt(match[2], 16);
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (token === '') continue;
+
+      // Flag strings: F=-Z-H3P-- and F'=-Z---P--  (keep as string, NOT numeric)
+      if (token.startsWith("F'=")) {
+        registers.flagsAlt = token.slice(3);
+        continue;
+      }
+      if (token.startsWith('F=')) {
+        registers.flags = token.slice(2);
+        continue;
+      }
+
+      // MMU=... is a long raw string, not a register value.
+      if (token.startsWith('MMU=')) {
+        registers.mmu = token.slice(4);
+        continue;
+      }
+
+      // "VPS: 0" arrives as two tokens: "VPS:" then "0".
+      if (token === 'VPS:') {
+        const next = tokens[++i];
+        const n = parseInt(next, 10);
+        if (!Number.isNaN(n)) registers.vps = n;
+        continue;
+      }
+
+      // "IM1" -> im = "1"
+      if (/^IM\d+$/.test(token)) {
+        registers.im = token.slice(2);
+        continue;
+      }
+
+      // "IFF--" / "IFF12" -> iff = "--" / "12"
+      if (token.startsWith('IFF')) {
+        registers.iff = token.slice(3);
+        continue;
+      }
+
+      // Generic KEY=HEX register pair (handles primed regs like AF', BC').
+      const eq = token.indexOf('=');
+      if (eq > 0) {
+        const key = token.slice(0, eq);
+        const valueStr = token.slice(eq + 1);
+        if (/^[0-9A-Fa-f]+$/.test(valueStr)) {
+          registers[key] = parseInt(valueStr, 16);
+        } else {
+          registers[key] = valueStr;
+        }
       }
     }
 
@@ -385,21 +463,24 @@ export class ZRCPClient {
   }
 
   /**
-   * Parse disassembly response
+   * Parse a `disassemble` (alias `d`) response.
+   *
+   * Real lines look like `  ADDR INSTRUCTION` — leading spaces, a hex address,
+   * then the instruction (which may contain spaces/commas). There is NO bytes
+   * column and NO colon, so `bytes` is always returned as [].
    */
   parseDisassembly(response: string): Array<{ address: number; bytes: number[]; instruction: string }> {
-    const lines = response.split('\n').filter(line => line.trim());
+    const lines = response.split('\n');
     const result: Array<{ address: number; bytes: number[]; instruction: string }> = [];
 
     for (const line of lines) {
-      // Expected format: "XXXX: YY YY ...  INSTRUCTION"
-      const match = line.match(/^([0-9A-Fa-f]+):\s+([0-9A-Fa-f\s]+)\s+(.*)$/);
+      const match = line.match(/^\s*([0-9A-Fa-f]{1,4})\s+(.+?)\s*$/);
       if (match) {
-        const address = parseInt(match[1], 16);
-        const bytesStr = match[2].trim();
-        const bytes = bytesStr.split(/\s+/).map(b => parseInt(b, 16));
-        const instruction = match[3].trim();
-        result.push({ address, bytes, instruction });
+        result.push({
+          address: parseInt(match[1], 16),
+          bytes: [],
+          instruction: match[2],
+        });
       }
     }
 

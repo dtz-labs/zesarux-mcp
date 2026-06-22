@@ -73,7 +73,7 @@ export class ZRCPServerTools {
         const peekResult = await this.zrcp.peek(
           args.address,
           args.length || 1,
-          args.memory_zone || 'ram'
+          args.memory_zone
         );
         return this.formatPeekResult(peekResult, args.format || 'hex');
 
@@ -86,14 +86,14 @@ export class ZRCPServerTools {
         return await this.zrcp.poke(
           args.address,
           pokeValue,
-          args.memory_zone || 'ram'
+          args.memory_zone
         );
 
       case 'hexdump':
         return await this.zrcp.hexdump(
           args.address || '4000',
           args.length || 256,
-          args.memory_zone || 'ram'
+          args.memory_zone
         );
 
       // 3. CPU Debugging
@@ -109,38 +109,40 @@ export class ZRCPServerTools {
 
       case 'cpu_history':
         return await this.zrcp.getCpuHistory(
-          args.entries || 10,
-          args.include_memory || false
+          args.action || 'get',
+          args.start ?? 0,
+          args.items ?? 10
         );
 
       case 'disassemble':
         const disasm = await this.zrcp.disassemble(
           args.address || 'PC',
-          args.length || 16,
-          args.memory_zone || 'ram'
+          args.length || 16
         );
         return this.formatDisassembly(disasm);
 
       // 4. Breakpoints
       case 'list_breakpoints':
-        return await this.zrcp.listBreakpoints();
+        return await this.zrcp.listBreakpoints(args.index, args.items);
 
       case 'set_breakpoint':
-        return await this.zrcp.setBreakpoint(args.address, {
-          id: args.id,
+        return await this.zrcp.setBreakpoint({
+          index: args.index,
           condition: args.condition,
+          address: args.address,
+          type: args.type,
           enabled: args.enabled !== false,
-          type: args.type || 'execute',
-          action: args.action || 'disassemble',
+          action: args.action,
           passCount: args.pass_count
         });
 
       case 'clear_breakpoint':
-        return await this.zrcp.clearBreakpoint(args.id);
+        return await this.zrcp.clearBreakpoint(args.id, args.mem_all);
 
       // 5. I/O Operations
       case 'read_port':
-        return await this.zrcp.readPort(args.port);
+        const portValue = await this.zrcp.readPort(args.port);
+        return JSON.stringify({ port: args.port, value: portValue });
 
       case 'write_port':
         return await this.zrcp.writePort(args.port, args.value);
@@ -149,29 +151,21 @@ export class ZRCPServerTools {
       case 'load_file':
         return await this.zrcp.loadFile(
           args.filename,
-          args.autostart !== false,
           args.file_type || 'auto'
         );
 
       case 'tape_control':
         return await this.zrcp.tapeControl(
           args.action,
-          args.filename,
-          args.position
+          args.filename
         );
 
       // 7. Snapshot Operations
       case 'save_snapshot':
-        return await this.zrcp.saveSnapshot(
-          args.filename,
-          args.format || 'zsf'
-        );
+        return await this.zrcp.saveSnapshot(args.filename);
 
       case 'load_snapshot':
-        return await this.zrcp.loadSnapshot(
-          args.filename,
-          args.preserve_machine || false
-        );
+        return await this.zrcp.loadSnapshot(args.filename);
 
       case 'snapshot_inram':
         return await this.zrcp.snapshotInRam(
@@ -187,24 +181,21 @@ export class ZRCPServerTools {
         );
 
       case 'get_screen':
-        const screenData = await this.zrcp.getScreen(args.format || 'scr');
-        return JSON.stringify({
-          format: args.format || 'scr',
-          size: screenData.length,
-          data: screenData.toString('hex')
-        });
+        const screenInfo = await this.zrcp.getScreen(args.format || 'scr');
+        return JSON.stringify(screenInfo);
 
       // 9. Keyboard Input
       case 'send_key':
-        return await this.zrcp.sendKey(
-          args.key,
-          args.action || 'tap'
-        );
+        return await this.zrcp.sendKey(args.key, {
+          action: args.action || 'tap',
+          keyCode: args.key_code,
+          time: args.time || 100
+        });
 
       case 'send_keys':
         return await this.zrcp.sendKeys(
           args.keys,
-          args.delay || 50
+          args.delay || 100
         );
 
       // 10. Assembly
@@ -216,23 +207,20 @@ export class ZRCPServerTools {
 
       // 11. Advanced Debugging
       case 'code_coverage':
-        if (args.reset) {
-          return await this.zrcp.getCodeCoverage(true);
-        }
-        return await this.zrcp.getCodeCoverage(false, args.address_range);
+        return await this.zrcp.codeCoverage(args.action);
 
       case 'cpu_transaction_log':
-        return await this.zrcp.cpuTransactionLog(args.action);
+        return await this.zrcp.cpuTransactionLog(args.parameter, args.value);
 
       case 'extended_stack':
-        return await this.zrcp.getExtendedStack(args.depth || 16);
+        return await this.zrcp.getExtendedStack(args.count ?? 16, args.index);
 
       // 12. Special Features
       case 'ay_player':
-        return await this.zrcp.ayPlayer(args.action, args.filename);
+        return await this.zrcp.ayPlayer(args.command, args.parameter);
 
       case 'mmc_reload':
-        return await this.zrcp.mmcReload(args.filename);
+        return await this.zrcp.mmcReload();
 
       // 13. Connection & Info
       case 'get_emulator_info':
@@ -282,10 +270,10 @@ export class ZRCPServerTools {
   private formatDisassembly(
     result: Array<{ address: number; bytes: number[]; instruction: string }>
   ): string {
+    // `disassemble` output carries no bytes column, so render `ADDR  INSTRUCTION`.
     return result.map(r => {
-      const bytes = r.bytes.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
       const addr = r.address.toString(16).toUpperCase().padStart(4, '0');
-      return `${addr}: ${bytes.padEnd(12, ' ')} ${r.instruction}`;
+      return `${addr}  ${r.instruction}`;
     }).join('\n');
   }
 
@@ -296,24 +284,29 @@ export class ZRCPServerTools {
     // 1. Machine Control
     this.registerTool({
       name: 'set_machine',
-      description: 'Set the emulated machine type in ZEsarUX',
+      description: 'Set the emulated machine type in ZEsarUX (ZRCP "set-machine <id>"). Use a real ZEsarUX machine identifier.',
       inputSchema: {
         type: 'object',
         properties: {
           machine: {
             type: 'string',
-            description: 'Machine identifier (e.g., "spectrum48", "spectrum128", "pentagon", "tbblue")',
+            description: 'ZEsarUX machine identifier (left column of get-machines), e.g. "48k", "128k", "TC2068", "Pentagon", "TBBlue".',
             enum: [
-              'spectrum48', 'spectrum48_plus', 'spectrum48_spanish',
-              'spectrum128', 'spectrum128_spanish',
-              'spectrum_plus2', 'spectrum_plus2_spanish', 'spectrum_plus2a',
-              'spectrum_plus3', 'spectrum_plus3_spanish',
-              'pentagon', 'pentagon128', 'pentagon512',
-              'tbblue', 'zxuno', 'tsconf',
-              'zx80', 'zx81',
-              'ql', 'z88',
-              'cpc464', 'cpc6128', 'cpc664',
-              'samcoup', 'msx1', 'sg1000', 'colecovision'
+              'MK14', 'ZX80', 'ZX81', '16k', '48k', '48kp', '128k', 'QL',
+              'P2', 'P2F', 'P2S', 'P2A40', 'P2A41', 'P2AS',
+              'P340', 'P341', 'P3S',
+              'TC2048', 'TC2068', 'TS1000', 'TS1500', 'TS2068', 'Inves',
+              '48ks', '128ks',
+              'TK80', 'TK82', 'TK82C', 'TK83', 'TK85',
+              'TK90X', 'TK90XS', 'TK95', 'TK95S',
+              'CZ1000', 'CZ1500', 'CZ1000p', 'CZ1500p', 'CZ2000',
+              'CZSPEC', 'CZSPECp',
+              'Z88', 'Sam', 'Pentagon',
+              'Chloe140', 'Chloe280', 'Chrome', 'Prism', 'ZXUNO',
+              'BaseConf', 'TSConf', 'TBBlue', 'ACE',
+              'CPC464', 'CPC4128', 'CPC664', 'CPC6128',
+              'PCW8256', 'PCW8512',
+              'MSX1', 'Coleco', 'SG1000', 'SMS', 'SVI318', 'SVI328'
             ]
           }
         },
@@ -323,13 +316,13 @@ export class ZRCPServerTools {
 
     this.registerTool({
       name: 'reset_machine',
-      description: 'Reset the emulated computer',
+      description: 'Reset the emulated machine. Soft reset sends ZRCP "reset-cpu"; hard reset sends "hard-reset-cpu".',
       inputSchema: {
         type: 'object',
         properties: {
           hard_reset: {
             type: 'boolean',
-            description: 'Perform hard reset (default: false)',
+            description: 'Perform a hard reset ("hard-reset-cpu") instead of a soft CPU reset ("reset-cpu").',
             default: false
           }
         }
@@ -339,7 +332,7 @@ export class ZRCPServerTools {
     // 2. Memory Operations
     this.registerTool({
       name: 'peek',
-      description: 'Read bytes from emulated memory',
+      description: 'Read bytes from emulated memory (ZRCP read-memory)',
       inputSchema: {
         type: 'object',
         properties: {
@@ -349,15 +342,14 @@ export class ZRCPServerTools {
           },
           length: {
             type: 'number',
-            description: 'Number of bytes to read (default: 1, max: 65536)',
+            description: 'Number of bytes to read (default: 1)',
             default: 1,
             maximum: 65536
           },
           memory_zone: {
             type: 'string',
-            description: 'Memory zone to read from',
-            enum: ['ram', 'rom', 'divmmc', 'zxuno_flash', 'file'],
-            default: 'ram'
+            description: 'Memory zone to read from. Omit to use the currently active zone. Only ram/rom/mapped switch zones; their ids are machine-dependent.',
+            enum: ['ram', 'rom', 'mapped']
           },
           format: {
             type: 'string',
@@ -372,7 +364,7 @@ export class ZRCPServerTools {
 
     this.registerTool({
       name: 'poke',
-      description: 'Write bytes to emulated memory',
+      description: 'Write bytes to emulated memory (ZRCP write-memory, space-separated bytes)',
       inputSchema: {
         type: 'object',
         properties: {
@@ -386,13 +378,12 @@ export class ZRCPServerTools {
               { type: 'number' },
               { type: 'array', items: { type: 'number' } }
             ],
-            description: 'Byte value or array of bytes to write'
+            description: 'Byte value or array of bytes to write. A single string is parsed as hex.'
           },
           memory_zone: {
             type: 'string',
-            description: 'Memory zone to write to',
-            enum: ['ram', 'divmmc', 'file'],
-            default: 'ram'
+            description: 'Memory zone to write to. Omit to use the currently active zone. Only ram/mapped switch zones; ids are machine-dependent.',
+            enum: ['ram', 'mapped']
           }
         },
         required: ['address', 'value']
@@ -401,7 +392,7 @@ export class ZRCPServerTools {
 
     this.registerTool({
       name: 'hexdump',
-      description: 'Display memory in hexadecimal format',
+      description: 'Display memory in hexadecimal + ascii (ZRCP hexdump)',
       inputSchema: {
         type: 'object',
         properties: {
@@ -417,9 +408,8 @@ export class ZRCPServerTools {
           },
           memory_zone: {
             type: 'string',
-            description: 'Memory zone to display',
-            enum: ['ram', 'rom', 'divmmc', 'zxuno_flash', 'file'],
-            default: 'ram'
+            description: 'Memory zone to display. Omit to use the currently active zone. Only ram/rom/mapped switch zones; ids are machine-dependent.',
+            enum: ['ram', 'rom', 'mapped']
           }
         }
       }
@@ -428,23 +418,16 @@ export class ZRCPServerTools {
     // 3. CPU Debugging
     this.registerTool({
       name: 'get_registers',
-      description: 'Get current CPU register values',
+      description: 'Get current CPU register values (Z80 main + alternate set, IX/IY/PC/SP/I/R, flag strings, interrupt mode, MEMPTR). Maps to ZRCP get-registers.',
       inputSchema: {
         type: 'object',
-        properties: {
-          format: {
-            type: 'string',
-            enum: ['json', 'table'],
-            description: 'Output format',
-            default: 'json'
-          }
-        }
+        properties: {}
       }
     });
 
     this.registerTool({
       name: 'set_register',
-      description: 'Set a CPU register value',
+      description: 'Set a CPU register value. Maps to ZRCP "set-register REG=VALUEH" (e.g. set-register DE=3344H).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -457,7 +440,7 @@ export class ZRCPServerTools {
           },
           value: {
             type: 'string',
-            description: 'Value to set (hexadecimal string)'
+            description: 'Value to set (hexadecimal, no prefix; "H" suffix added automatically, e.g. "3344")'
           }
         },
         required: ['register', 'value']
@@ -466,19 +449,14 @@ export class ZRCPServerTools {
 
     this.registerTool({
       name: 'cpu_step',
-      description: 'Execute single CPU instruction',
+      description: 'Execute a single CPU instruction. Enters cpu-step mode first, then runs ZRCP cpu-step (or cpu-step-over when step_over is set).',
       inputSchema: {
         type: 'object',
         properties: {
           step_over: {
             type: 'boolean',
-            description: 'Step over (skip subroutine calls)',
+            description: 'Step over subroutine calls (cpu-step-over) instead of into them (cpu-step)',
             default: false
-          },
-          update_display: {
-            type: 'boolean',
-            description: 'Update display after step',
-            default: true
           }
         }
       }
@@ -486,20 +464,25 @@ export class ZRCPServerTools {
 
     this.registerTool({
       name: 'cpu_history',
-      description: 'Get CPU execution history (past states)',
+      description: 'Query the CPU execution history ring buffer (ZRCP cpu-history). History must be enabled and started first (action=enable then action=start). action=get returns a recent PC trace.',
       inputSchema: {
         type: 'object',
         properties: {
-          entries: {
-            type: 'number',
-            description: 'Number of history entries to retrieve (default: 10, max: 1000)',
-            default: 10,
-            maximum: 1000
+          action: {
+            type: 'string',
+            enum: ['get', 'get-at', 'get-extended', 'size', 'enable', 'disable', 'start', 'stop', 'clear'],
+            description: 'History action. get = recent PC trace (cpu-history get-pc); get-at/get-extended = registers at an index; size = element count; enable/disable/start/stop/clear manage recording.',
+            default: 'get'
           },
-          include_memory: {
-            type: 'boolean',
-            description: 'Include memory dumps in history',
-            default: false
+          start: {
+            type: 'number',
+            description: 'Start position / index (0 = most recent).',
+            default: 0
+          },
+          items: {
+            type: 'number',
+            description: 'Number of items to return (get action only).',
+            default: 10
           }
         }
       }
@@ -507,30 +490,19 @@ export class ZRCPServerTools {
 
     this.registerTool({
       name: 'disassemble',
-      description: 'Disassemble code at memory location',
+      description: 'Disassemble Z80 code (ZRCP disassemble [address] [lines]). Defaults to PC. Output is address + instruction (no byte column). Memory zone is selected separately via the active zone.',
       inputSchema: {
         type: 'object',
         properties: {
           address: {
             type: 'string',
-            description: 'Start address (hexadecimal, default: PC)',
+            description: 'Start address (hexadecimal, e.g. "8000"). Default: PC.',
             default: 'PC'
           },
           length: {
             type: 'number',
-            description: 'Number of bytes to disassemble',
+            description: 'Number of instruction lines to disassemble',
             default: 16
-          },
-          memory_zone: {
-            type: 'string',
-            description: 'Memory zone to disassemble from',
-            enum: ['ram', 'rom', 'divmmc', 'zxuno_flash', 'file'],
-            default: 'ram'
-          },
-          symbols: {
-            type: 'boolean',
-            description: 'Include symbol names if available',
-            default: true
           }
         }
       }
@@ -539,82 +511,98 @@ export class ZRCPServerTools {
     // 4. Breakpoints
     this.registerTool({
       name: 'list_breakpoints',
-      description: 'List all active breakpoints',
+      description: 'List breakpoints (ZRCP get-breakpoints). Optionally page from a starting index.',
       inputSchema: {
         type: 'object',
-        properties: {}
+        properties: {
+          index: {
+            type: 'number',
+            description: 'Starting breakpoint slot index to list from (optional; lists all if omitted)'
+          },
+          items: {
+            type: 'number',
+            description: 'Number of slots to list starting at index (optional; requires index)'
+          }
+        }
       }
     });
 
     this.registerTool({
       name: 'set_breakpoint',
-      description: 'Set or modify a breakpoint',
+      description:
+        'Set a breakpoint in a numbered slot (ZRCP set-breakpoint). A breakpoint is an EXPRESSION condition that fires when non-zero. ' +
+        'Provide a raw "condition" (e.g. "PC=8000", "MWA=16384", "A=0 and BC<33"), or provide "type"+"address" to have it compiled. ' +
+        'Memory read/write use set-membreakpoint; execute uses PC=addr; port read/write use PRA/PWA. Empty condition disables the slot.',
       inputSchema: {
         type: 'object',
         properties: {
-          id: {
+          index: {
             type: 'number',
-            description: 'Breakpoint ID (omit to create new)'
-          },
-          address: {
-            type: 'string',
-            description: 'Breakpoint address (hexadecimal)'
+            description: 'Breakpoint slot index (required by ZRCP)'
           },
           condition: {
             type: 'string',
-            description: 'Conditional expression (e.g., "PC=4000", "A=0", "HL>8000")'
+            description: 'Raw expression condition (takes precedence over type/address). Numbers default decimal; suffix H=hex.'
           },
-          enabled: {
-            type: 'boolean',
-            description: 'Enable breakpoint',
-            default: true
+          address: {
+            type: 'string',
+            description: 'Address (hex) used when compiling from "type" (e.g. "8000"). For port_read/port_write this is the port (hex).'
           },
           type: {
             type: 'string',
-            enum: ['execute', 'read', 'write', 'port_read', 'port_write'],
-            description: 'Breakpoint type',
-            default: 'execute'
+            enum: ['execute', 'read', 'write', 'readwrite', 'port_read', 'port_write', 'disabled'],
+            description: 'Convenience kind (ignored if "condition" is given): execute→PC=addr; read/write/readwrite→set-membreakpoint type 1/2/3; port_read→PRA; port_write→PWA; disabled→empty.'
+          },
+          enabled: {
+            type: 'boolean',
+            description: 'If false, disable-breakpoint is issued for the slot after setting',
+            default: true
           },
           action: {
             type: 'string',
             enum: ['none', 'disassemble', 'printregs', 'save_binary', 'reset_tstates'],
-            description: 'Action when breakpoint fires',
-            default: 'disassemble'
+            description: 'Action when fired (ZRCP set-breakpointaction). none=just break.'
           },
           pass_count: {
             type: 'number',
-            description: 'Fire after N hits (pass count)'
+            description: 'Fire only after N hits (ZRCP set-breakpointpasscount)'
           }
         },
-        required: ['address']
+        required: ['index']
       }
     });
 
     this.registerTool({
       name: 'clear_breakpoint',
-      description: 'Remove a breakpoint',
+      description:
+        'Clear a breakpoint. ZEsarUX has no clear-single command: disabling the slot (disable-breakpoint) effectively clears it. ' +
+        'Set mem_all=true to clear ALL memory breakpoints (clear-membreakpoints) instead.',
       inputSchema: {
         type: 'object',
         properties: {
           id: {
             type: 'number',
-            description: 'Breakpoint ID to remove'
+            description: 'Breakpoint slot index to clear (via disable-breakpoint)'
+          },
+          mem_all: {
+            type: 'boolean',
+            description: 'If true, clear ALL memory breakpoints (clear-membreakpoints); id is ignored',
+            default: false
           }
-        },
-        required: ['id']
+        }
       }
     });
 
     // 5. I/O Operations
     this.registerTool({
       name: 'read_port',
-      description: 'Read from I/O port',
+      description: 'Read a byte from an I/O port. ZEsarUX has no read-port command, so this evaluates IN(port) and returns the integer value.',
       inputSchema: {
         type: 'object',
         properties: {
           port: {
             type: 'string',
-            description: 'Port address (hexadecimal)'
+            description: 'Port address (hexadecimal, e.g. "FE" for port 254)'
           }
         },
         required: ['port']
@@ -623,17 +611,17 @@ export class ZRCPServerTools {
 
     this.registerTool({
       name: 'write_port',
-      description: 'Write to I/O port',
+      description: 'Write a byte to an I/O port (ZRCP write-port).',
       inputSchema: {
         type: 'object',
         properties: {
           port: {
             type: 'string',
-            description: 'Port address (hexadecimal)'
+            description: 'Port address (hexadecimal, e.g. "FE" for port 254)'
           },
           value: {
             type: 'string',
-            description: 'Value to write (hexadecimal)'
+            description: 'Byte value to write (hexadecimal, e.g. "07")'
           }
         },
         required: ['port', 'value']
@@ -643,23 +631,19 @@ export class ZRCPServerTools {
     // 6. Tape/Disk Operations
     this.registerTool({
       name: 'load_file',
-      description: 'Load a tape, disk, or snapshot file',
+      description:
+        'Load a file into the emulator. By default uses ZEsarUX smartload, which auto-detects the file type and runs it. Use file_type to force a specific loader.',
       inputSchema: {
         type: 'object',
         properties: {
           filename: {
             type: 'string',
-            description: 'Path to file to load'
-          },
-          autostart: {
-            type: 'boolean',
-            description: 'Automatically start loading',
-            default: true
+            description: 'Path to the file to load'
           },
           file_type: {
             type: 'string',
-            enum: ['auto', 'tape', 'disk', 'snapshot', 'mmc', 'ide'],
-            description: 'File type (auto-detect if not specified)',
+            enum: ['auto', 'snapshot', 'tape'],
+            description: "'auto' (default) = smartload (auto-detect & run); 'snapshot' = snapshot-load; 'tape' = realtape-open (inserts a REAL tape).",
             default: 'auto'
           }
         },
@@ -669,22 +653,19 @@ export class ZRCPServerTools {
 
     this.registerTool({
       name: 'tape_control',
-      description: 'Control tape loading',
+      description:
+        'Insert a real tape into the emulator. NOTE: ZEsarUX ZRCP only supports inserting a real tape (realtape-open); transport actions (play/stop/rewind/forward) are NOT available over ZRCP. For ordinary .tap/.tzx files, prefer load_file (smartload).',
       inputSchema: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['play', 'stop', 'rewind', 'forward', 'insert'],
-            description: 'Tape control action'
+            enum: ['insert', 'play', 'stop', 'rewind', 'forward'],
+            description: "Only 'insert' is supported over ZRCP (maps to realtape-open). The others return a not-supported message."
           },
           filename: {
             type: 'string',
-            description: 'Tape filename (for insert action)'
-          },
-          position: {
-            type: 'number',
-            description: 'Block position for seek operations'
+            description: 'Tape filename (required for the insert action)'
           }
         },
         required: ['action']
@@ -694,19 +675,14 @@ export class ZRCPServerTools {
     // 7. Snapshot Operations
     this.registerTool({
       name: 'save_snapshot',
-      description: 'Save emulator state to snapshot file',
+      description:
+        'Save the emulator state to a snapshot file (ZRCP snapshot-save). The format is determined by the file extension (e.g. .zsf, .sna, .z80, .sp) — there is no separate format argument.',
       inputSchema: {
         type: 'object',
         properties: {
           filename: {
             type: 'string',
-            description: 'Output filename'
-          },
-          format: {
-            type: 'string',
-            enum: ['zsf', 'sna', 'z80', 'sp'],
-            description: 'Snapshot format',
-            default: 'zsf'
+            description: 'Output filename. The extension selects the snapshot format (e.g. "state.zsf", "game.sna").'
           }
         },
         required: ['filename']
@@ -715,18 +691,13 @@ export class ZRCPServerTools {
 
     this.registerTool({
       name: 'load_snapshot',
-      description: 'Load emulator state from snapshot file',
+      description: 'Load emulator state from a snapshot file (ZRCP snapshot-load).',
       inputSchema: {
         type: 'object',
         properties: {
           filename: {
             type: 'string',
             description: 'Snapshot filename to load'
-          },
-          preserve_machine: {
-            type: 'boolean',
-            description: "Don't change machine type",
-            default: false
           }
         },
         required: ['filename']
@@ -735,39 +706,41 @@ export class ZRCPServerTools {
 
     this.registerTool({
       name: 'snapshot_inram',
-      description: 'Manage RAM snapshots (Time Machine feature)',
+      description:
+        'Access ZEsarUX in-RAM ("Time Machine") snapshots — an automatic ring buffer. Supports "load" (snapshot-inram-load) and "get_index" (snapshot-inram-get-index); position 0 is the oldest. Saving/listing/deleting are NOT supported over ZRCP.',
       inputSchema: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['save', 'load', 'list', 'delete'],
-            description: 'Action to perform'
+            enum: ['load', 'get_index'],
+            description: "'load' = snapshot-inram-load <position>; 'get_index' = snapshot-inram-get-index <position> (0 = oldest)."
           },
           index: {
             type: 'number',
-            description: 'Snapshot index (for load/delete)'
+            description: 'Ring-buffer position (0 = oldest). Required for both load and get_index.'
           }
         },
-        required: ['action']
+        required: ['action', 'index']
       }
     });
 
     // 8. Display Operations
     this.registerTool({
       name: 'save_screen',
-      description: 'Save current screen to file',
+      description:
+        'Save the current emulator screen to a file on the ZEsarUX host (ZRCP save-screen). Format is inferred from the file extension; only scr, bmp and pbm are supported.',
       inputSchema: {
         type: 'object',
         properties: {
           filename: {
             type: 'string',
-            description: 'Output filename'
+            description: 'Output path on the machine running ZEsarUX'
           },
           format: {
             type: 'string',
-            enum: ['scr', 'png', 'bmp', 'txt', 'stl'],
-            description: 'Output format',
+            enum: ['scr', 'bmp', 'pbm'],
+            description: 'Image format (inferred from extension); scr = raw ZX screen',
             default: 'scr'
           }
         },
@@ -777,14 +750,15 @@ export class ZRCPServerTools {
 
     this.registerTool({
       name: 'get_screen',
-      description: 'Get screen data as buffer',
+      description:
+        'Capture the current screen. NOTE: ZRCP cannot return pixel data to the client, so this writes a file on the ZEsarUX host (via save-screen) and returns its path. Use get-ocr for on-screen text.',
       inputSchema: {
         type: 'object',
         properties: {
           format: {
             type: 'string',
-            enum: ['scr', 'attributes', 'pixels'],
-            description: 'Screen data format',
+            enum: ['scr', 'bmp', 'pbm'],
+            description: 'Image format for the host-side file',
             default: 'scr'
           }
         }
@@ -794,19 +768,29 @@ export class ZRCPServerTools {
     // 9. Keyboard Input
     this.registerTool({
       name: 'send_key',
-      description: 'Send key press/release to emulator',
+      description:
+        'Send a single key to the emulator. Printable keys (and ENTER/SPACE/TAB) are delivered via send-keys-ascii. press/release require a numeric util_teclas key_code (send-keys-event).',
       inputSchema: {
         type: 'object',
         properties: {
           key: {
             type: 'string',
-            description: 'Key name or character'
+            description: 'A single printable character to type, or the words ENTER / SPACE / TAB. For special keys with no printable form, use key_code + action.'
           },
           action: {
             type: 'string',
             enum: ['press', 'release', 'tap'],
-            description: 'Key action',
+            description: 'tap = type the character; press/release require key_code (raw key event).',
             default: 'tap'
+          },
+          key_code: {
+            type: 'number',
+            description: 'util_teclas enum value (from ZEsarUX utils.h). Required for press/release.'
+          },
+          time: {
+            type: 'number',
+            description: 'ms between keystrokes for tap (100 = normal BASIC speed)',
+            default: 100
           }
         },
         required: ['key']
@@ -815,18 +799,19 @@ export class ZRCPServerTools {
 
     this.registerTool({
       name: 'send_keys',
-      description: 'Send sequence of keys',
+      description:
+        'Type a string into the emulator via send-keys-ascii (one ASCII code per character; useful for BASIC commands like LOAD "").',
       inputSchema: {
         type: 'object',
         properties: {
           keys: {
             type: 'string',
-            description: 'Key sequence to send (e.g., "LOAD \\"game\\"")'
+            description: 'The literal string to type (e.g. \'LOAD ""\')'
           },
           delay: {
             type: 'number',
-            description: 'Delay between keys in milliseconds',
-            default: 50
+            description: 'ms between keystrokes (100 = normal BASIC typing speed)',
+            default: 100
           }
         },
         required: ['keys']
@@ -836,17 +821,17 @@ export class ZRCPServerTools {
     // 10. Assembly
     this.registerTool({
       name: 'assemble',
-      description: 'Assemble instruction at address',
+      description: 'Assemble a Z80 instruction at an address (ZRCP: assemble [address] [instruction])',
       inputSchema: {
         type: 'object',
         properties: {
           instruction: {
             type: 'string',
-            description: 'Assembly instruction (e.g., "LD A, 10")'
+            description: 'Assembly instruction, e.g. "NOP" or "LD A,10"'
           },
           address: {
             type: 'string',
-            description: 'Address to assemble at (hexadecimal, default: PC)',
+            description: 'Address to assemble at (decimal or hex, default: PC)',
             default: 'PC'
           }
         },
@@ -857,33 +842,14 @@ export class ZRCPServerTools {
     // 11. Advanced Debugging
     this.registerTool({
       name: 'code_coverage',
-      description: 'Get code coverage information',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          reset: {
-            type: 'boolean',
-            description: 'Reset coverage data',
-            default: false
-          },
-          address_range: {
-            type: 'string',
-            description: 'Address range (e.g., "8000-9000")'
-          }
-        }
-      }
-    });
-
-    this.registerTool({
-      name: 'cpu_transaction_log',
-      description: 'Control CPU transaction logging',
+      description: 'CPU code-coverage control (ZRCP cpu-code-coverage). Enable/disable tracking, get covered addresses, or clear the list.',
       inputSchema: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['start', 'stop', 'get', 'clear'],
-            description: 'Log action'
+            enum: ['enabled', 'disabled', 'get', 'clear'],
+            description: 'enabled = "cpu-code-coverage enabled yes", disabled = "... enabled no", get = list run addresses, clear = clear the address list'
           }
         },
         required: ['action']
@@ -891,15 +857,43 @@ export class ZRCPServerTools {
     });
 
     this.registerTool({
-      name: 'extended_stack',
-      description: 'Get extended stack information',
+      name: 'cpu_transaction_log',
+      description: 'Configure the CPU transaction log (ZRCP cpu-transaction-log parameter value). Set logfile then enabled=yes to start. Output goes to the configured logfile; there is no read-back command.',
       inputSchema: {
         type: 'object',
         properties: {
-          depth: {
+          parameter: {
+            type: 'string',
+            enum: [
+              'logfile', 'enabled', 'autorotate', 'rotatefiles', 'rotatesize',
+              'rotatelines', 'truncate', 'truncaterotated', 'ignrephalt',
+              'datetime', 'tstates', 'address', 'opcode', 'registers'
+            ],
+            description: 'Transaction-log parameter to set'
+          },
+          value: {
+            type: 'string',
+            description: 'Value: a filename (logfile), yes|no (boolean params), or a number (rotatefiles/rotatesize/rotatelines)'
+          }
+        },
+        required: ['parameter', 'value']
+      }
+    });
+
+    this.registerTool({
+      name: 'extended_stack',
+      description: 'Read the extended stack — typed values currently on the stack (ZRCP extended-stack get <count> [index]). The extended stack must be enabled in ZEsarUX first. index defaults to SP.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          count: {
             type: 'number',
-            description: 'Stack depth to retrieve',
+            description: 'Number of stack values to fetch (required by ZRCP).',
             default: 16
+          },
+          index: {
+            type: 'number',
+            description: 'Start index/address (default: SP register).'
           }
         }
       }
@@ -908,49 +902,50 @@ export class ZRCPServerTools {
     // 12. Special Features
     this.registerTool({
       name: 'ay_player',
-      description: 'Control AY music player',
+      description: 'Run a command on the ZEsarUX AY Player (ZRCP ayplayer command [parameter]).',
       inputSchema: {
         type: 'object',
         properties: {
-          action: {
+          command: {
             type: 'string',
-            enum: ['play', 'stop', 'pause', 'next', 'prev', 'load'],
-            description: 'Player action'
+            enum: [
+              'load', 'load-dir', 'play-id', 'stop',
+              'next-file', 'prev-file', 'next-track', 'prev-track',
+              'get-author', 'get-elapsed-track', 'get-file', 'get-id-file',
+              'get-misc', 'get-playlist', 'get-total-files', 'get-total-tracks',
+              'get-track-length', 'get-track-name', 'get-track-number'
+            ],
+            description: 'AY Player subcommand'
           },
-          filename: {
+          parameter: {
             type: 'string',
-            description: 'AY file to load (for load action)'
+            description: 'Parameter: file path (load), directory (load-dir), or playlist id (play-id). Omit for stop/next-*/prev-*/get-* commands.'
           }
         },
-        required: ['action']
+        required: ['command']
       }
     });
 
     this.registerTool({
       name: 'mmc_reload',
-      description: 'Reload MMC/SD card image',
+      description: 'Reload the configured MMC file (ZRCP mmc-reload). Takes no arguments.',
       inputSchema: {
         type: 'object',
-        properties: {
-          filename: {
-            type: 'string',
-            description: 'MMC file to reload (optional, uses current if omitted)'
-          }
-        }
+        properties: {}
       }
     });
 
     // 13. Connection & Info
     this.registerTool({
       name: 'get_emulator_info',
-      description: 'Get emulator information',
+      description: 'Get emulator information via ZRCP. version→get-version, machine→get-current-machine, os→get-os, cpu_core→get-cpu-core-name; all→combines version + machine + os + buildnumber.',
       inputSchema: {
         type: 'object',
         properties: {
           details: {
             type: 'string',
-            enum: ['version', 'machine', 'features', 'all'],
-            description: 'Information to retrieve',
+            enum: ['version', 'machine', 'os', 'cpu_core', 'all'],
+            description: 'Which info to retrieve. (There is no ZEsarUX "features" command; use cpu_core for the CPU core name.)',
             default: 'all'
           }
         }
@@ -959,13 +954,13 @@ export class ZRCPServerTools {
 
     this.registerTool({
       name: 'get_tstates',
-      description: 'Get T-state counters',
+      description: 'Get the T-state counter via ZRCP get-tstates. If reset is true, resets the PARTIAL counter (reset-tstates-partial) and returns it. ZEsarUX has no way to reset the main counter.',
       inputSchema: {
         type: 'object',
         properties: {
           reset: {
             type: 'boolean',
-            description: 'Reset partial counter',
+            description: 'Reset and read the partial T-state counter instead of reading the main counter.',
             default: false
           }
         }
