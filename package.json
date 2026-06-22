@@ -1,0 +1,39 @@
+{
+  "name": "zesarux-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for ZEsarUX ZX Spectrum emulator using ZRCP protocol",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "zesarux-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js",
+    "test": "node --test dist/test/**/*.test.js",
+    "lint": "eslint src/**/*.ts"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "zesarux",
+    "zx-spectrum",
+    "emulator",
+    "debugging"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
