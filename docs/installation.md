@@ -91,6 +91,8 @@ Configuration is done via environment variables:
 | `ZESARUX_PORT` | `10000` | ZRCP port |
 | `ZESARUX_TIMEOUT` | `30000` | Connection timeout (ms) |
 | `ZESARUX_AUTO_RECONNECT` | `true` | Auto-reconnect on disconnect |
+| `ZESARUX_AUTOLAUNCH` | *(auto)* | Auto-start a local ZEsarUX. Defaults on only when `ZESARUX_HOST`/`ZESARUX_PORT` are unset; set `true`/`false` to force. |
+| `ZESARUX_PATH` | *(unset)* | Explicit path to the ZEsarUX binary for auto-launch |
 | `LOG_LEVEL` | `info` | Log level (debug/info/warn/error) |
 | `LOG_ZRCP_COMMANDS` | `true` | Log ZRCP commands |
 
@@ -100,6 +102,19 @@ ZESARUX_HOST=localhost
 ZESARUX_PORT=10000
 LOG_LEVEL=info
 ```
+
+## Auto-launching ZEsarUX
+
+By default, when you run against the local emulator (no custom
+`ZESARUX_HOST`/`ZESARUX_PORT`), the MCP server starts ZEsarUX for you if it
+isn't already running:
+
+- If something is already listening on the ZRCP port, that instance is reused.
+- Otherwise the server looks for the binary via `ZESARUX_PATH`, then typical
+  per-OS install locations, then your `PATH`, and launches it with
+  `--enablezrcp --zrcpport <port>`.
+- A ZEsarUX the server started is shut down again when the server stops.
+- Set `ZESARUX_AUTOLAUNCH=false` to manage the emulator yourself.
 
 ## Next steps
 

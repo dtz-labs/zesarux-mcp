@@ -8,9 +8,52 @@ MCP server for [ZEsarUX ZX Spectrum emulator](https://github.com/chernandezba/ze
 
 13 tool categories with 50+ operations: machine control, PEEK/POKE, debugging (breakpoints, registers, disassembly), tape/disk loading, snapshots, keyboard input, assembly, and more.
 
-## Quick Start
+## TL;DR
 
-### 1. Install ZEsarUX
+**1. Build the server:**
+```bash
+git clone https://github.com/dtz-labs/zesarux-mcp.git
+cd zesarux-mcp
+npm install
+npm run build
+```
+
+**2. Add it to your MCP client** (use the absolute path to `dist/index.js`):
+
+**Claude Code** — `~/.config/claude-code/config.json`
+```json
+{
+  "mcpServers": {
+    "zesarux": {
+      "command": "node",
+      "args": ["/absolute/path/to/zesarux-mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+**Claude Desktop** — `~/Library/Application Support/Claude/claude_desktop_config.json`
+```json
+{
+  "mcpServers": {
+    "zesarux": {
+      "command": "node",
+      "args": ["/absolute/path/to/zesarux-mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+**3. Restart the client.** That's it — if ZEsarUX is installed, the server
+**starts it automatically** (with ZRCP enabled) the first time a tool runs. No
+need to launch the emulator yourself.
+
+> Other clients (Codex, OpenCode, JetBrains) → see [Configuring MCP Clients](docs/clients.md).
+
+## Installing ZEsarUX
+
+The auto-launch above only works if ZEsarUX is actually installed. If you don't
+have it yet:
 
 **macOS:**
 ```bash
@@ -24,48 +67,19 @@ sudo apt-get install zesarux
 
 **Or download from:** [ZEsarUX releases](https://github.com/chernandezba/zesarux/releases)
 
-### 2. Start ZEsarUX with ZRCP
+### Auto-launch details
 
-```bash
-zesarux --enablezrcp --zrcpport 10000
-```
-
-### 3. Install & Build MCP Server
-
-```bash
-git clone https://github.com/dtz-labs/zesarux-mcp.git
-cd zesarux-mcp
-npm install
-npm run build
-```
-
-### 4. Configure MCP
-
-**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-```json
-{
-  "mcpServers": {
-    "zesarux": {
-      "command": "node",
-      "args": ["/absolute/path/to/zesarux-mcp/dist/index.js"]
-    }
-  }
-}
-```
-
-**Claude Code** (`~/.config/claude-code/config.json`):
-```json
-{
-  "mcpServers": {
-    "zesarux": {
-      "command": "node",
-      "args": ["/absolute/path/to/zesarux-mcp/dist/index.js"]
-    }
-  }
-}
-```
-
-Restart Claude and the tools will be available.
+- The server only auto-launches when you use the **default** connection
+  (it hasn't been pointed at a custom `ZESARUX_HOST`/`ZESARUX_PORT`) and nothing
+  is already listening on the port. An already-running ZEsarUX is reused as-is.
+- It looks for the binary via `ZESARUX_PATH`, then typical install locations,
+  then your `PATH`. Set `ZESARUX_PATH` if it lives somewhere unusual.
+- A ZEsarUX that the server started is stopped again when the server shuts down.
+- To opt out and manage the emulator yourself, set `ZESARUX_AUTOLAUNCH=false`
+  and start it manually:
+  ```bash
+  zesarux --enablezrcp --zrcpport 10000
+  ```
 
 ## Documentation
 

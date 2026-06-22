@@ -10,6 +10,8 @@
  *   ZESARUX_PORT - ZRCP port (default: 10000)
  *   ZESARUX_TIMEOUT - Connection timeout in ms (default: 30000)
  *   ZESARUX_AUTO_RECONNECT - Auto reconnect on disconnect (default: true)
+ *   ZESARUX_AUTOLAUNCH - Auto-start a local ZEsarUX (default: on for default config)
+ *   ZESARUX_PATH - Explicit path to the ZEsarUX binary
  *   LOG_LEVEL - Log level (default: info)
  *   LOG_ZRCP_COMMANDS - Log ZRCP commands (default: true)
  */
@@ -25,6 +27,7 @@ import { loadConfig } from './config.js';
 import { Logger } from './logger.js';
 import { ZRCPClient } from './zrcp-client.js';
 import { ZRCPServerTools } from './tools.js';
+import { ZesaruxLauncher } from './launcher.js';
 
 /**
  * Main ZEsarUX MCP Server class
@@ -34,11 +37,15 @@ class ZRCPServer {
   private zrcpClient: ZRCPClient;
   private tools: ZRCPServerTools;
   private logger: Logger;
+  private launcher: ZesaruxLauncher;
   private config: ReturnType<typeof loadConfig>;
 
   constructor() {
     this.config = loadConfig();
     this.logger = new Logger(this.config.logging.level, this.config.logging.zrcpCommands);
+
+    // Launcher for auto-starting a local ZEsarUX when configured
+    this.launcher = new ZesaruxLauncher(this.logger);
 
     // Initialize ZRCP client
     this.zrcpClient = new ZRCPClient(
@@ -111,6 +118,15 @@ class ZRCPServer {
   async start(): Promise<void> {
     this.logger.info('Starting ZEsarUX MCP Server...');
 
+    // Auto-launch a local ZEsarUX if enabled and nothing is listening yet
+    if (this.config.zesarux.autoLaunch) {
+      await this.launcher.ensureRunning(
+        this.config.zesarux.host,
+        this.config.zesarux.port,
+        this.config.zesarux.binaryPath
+      );
+    }
+
     // Connect to ZEsarUX
     try {
       await this.zrcpClient.connect();
@@ -135,6 +151,7 @@ class ZRCPServer {
 
     await this.server.close();
     this.zrcpClient.disconnect();
+    this.launcher.shutdown();
 
     this.logger.info('ZEsarUX MCP Server stopped');
   }

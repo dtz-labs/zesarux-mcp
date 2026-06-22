@@ -8,6 +8,10 @@ export interface ZEsarUXConfig {
   timeout: number;
   retryAttempts: number;
   autoReconnect: boolean;
+  /** Auto-launch a local ZEsarUX when the port is free (default config only). */
+  autoLaunch: boolean;
+  /** Optional explicit path to the ZEsarUX binary (ZESARUX_PATH). */
+  binaryPath?: string;
 }
 
 export interface MCPConfig {
@@ -41,6 +45,20 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
   return value ? value.toLowerCase() === 'true' : defaultValue;
 }
 
+/**
+ * Decide whether the server should auto-launch a local ZEsarUX.
+ *
+ * Defaults to true only when the user has not pointed the server at a specific
+ * host or port (i.e. the default localhost:10000). An explicit
+ * ZESARUX_AUTOLAUNCH overrides that heuristic either way.
+ */
+export function shouldAutoLaunch(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.ZESARUX_AUTOLAUNCH !== undefined) {
+    return env.ZESARUX_AUTOLAUNCH.toLowerCase() === 'true';
+  }
+  return env.ZESARUX_HOST === undefined && env.ZESARUX_PORT === undefined;
+}
+
 export function loadConfig(): Config {
   return {
     zesarux: {
@@ -49,6 +67,8 @@ export function loadConfig(): Config {
       timeout: getEnvNumber('ZESARUX_TIMEOUT', 30000),
       retryAttempts: getEnvNumber('ZESARUX_RETRY_ATTEMPTS', 3),
       autoReconnect: getEnvBoolean('ZESARUX_AUTO_RECONNECT', true),
+      autoLaunch: shouldAutoLaunch(),
+      binaryPath: process.env.ZESARUX_PATH,
     },
     mcp: {
       name: 'zesarux-mcp',
