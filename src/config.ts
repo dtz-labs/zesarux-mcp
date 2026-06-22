@@ -8,6 +8,14 @@ export interface ZEsarUXConfig {
   timeout: number;
   retryAttempts: number;
   autoReconnect: boolean;
+  /** Opt-in: launch ZEsarUX automatically if it isn't reachable. */
+  autoLaunch: boolean;
+  /** Explicit ZEsarUX binary path override (ZESARUX_PATH). */
+  binaryPath?: string;
+  /** Extra args appended to the spawn (ZESARUX_ARGS, whitespace-split). */
+  launchArgs: string[];
+  /** How long to wait for the ZRCP port after launching (ms). */
+  launchTimeout: number;
 }
 
 export interface MCPConfig {
@@ -41,6 +49,12 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
   return value ? value.toLowerCase() === 'true' : defaultValue;
 }
 
+/** Split a command-line string into argv tokens, dropping empty tokens. */
+function splitArgs(value: string | undefined): string[] {
+  if (!value) return [];
+  return value.trim().split(/\s+/).filter(Boolean);
+}
+
 export function loadConfig(): Config {
   return {
     zesarux: {
@@ -49,6 +63,10 @@ export function loadConfig(): Config {
       timeout: getEnvNumber('ZESARUX_TIMEOUT', 30000),
       retryAttempts: getEnvNumber('ZESARUX_RETRY_ATTEMPTS', 3),
       autoReconnect: getEnvBoolean('ZESARUX_AUTO_RECONNECT', true),
+      autoLaunch: getEnvBoolean('ZESARUX_AUTOLAUNCH', false),
+      binaryPath: process.env.ZESARUX_PATH,
+      launchArgs: splitArgs(process.env.ZESARUX_ARGS),
+      launchTimeout: getEnvNumber('ZESARUX_LAUNCH_TIMEOUT', 20000),
     },
     mcp: {
       name: 'zesarux-mcp',

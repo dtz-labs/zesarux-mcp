@@ -60,3 +60,54 @@ test('loadConfig parses ZESARUX_AUTO_RECONNECT=false as a boolean', () => {
     else process.env.ZESARUX_AUTO_RECONNECT = saved;
   }
 });
+
+test('auto-launch is OFF by default (opt-in)', () => {
+  withoutEnv(['ZESARUX_AUTOLAUNCH'], () => {
+    const cfg = loadConfig();
+    assert.equal(cfg.zesarux.autoLaunch, false);
+    assert.equal(cfg.zesarux.launchTimeout, 20000);
+    assert.deepEqual(cfg.zesarux.launchArgs, []);
+    assert.equal(cfg.zesarux.binaryPath, undefined);
+  });
+});
+
+test('ZESARUX_AUTOLAUNCH=true enables auto-launch', () => {
+  const saved = process.env.ZESARUX_AUTOLAUNCH;
+  process.env.ZESARUX_AUTOLAUNCH = 'true';
+  try {
+    assert.equal(loadConfig().zesarux.autoLaunch, true);
+  } finally {
+    if (saved === undefined) delete process.env.ZESARUX_AUTOLAUNCH;
+    else process.env.ZESARUX_AUTOLAUNCH = saved;
+  }
+});
+
+test('ZESARUX_ARGS is split on whitespace with empty tokens dropped', () => {
+  const saved = process.env.ZESARUX_ARGS;
+  process.env.ZESARUX_ARGS = '  --vo null   --ao null ';
+  try {
+    assert.deepEqual(loadConfig().zesarux.launchArgs, ['--vo', 'null', '--ao', 'null']);
+  } finally {
+    if (saved === undefined) delete process.env.ZESARUX_ARGS;
+    else process.env.ZESARUX_ARGS = saved;
+  }
+});
+
+test('ZESARUX_PATH and ZESARUX_LAUNCH_TIMEOUT are read from the environment', () => {
+  const saved = {
+    path: process.env.ZESARUX_PATH,
+    timeout: process.env.ZESARUX_LAUNCH_TIMEOUT,
+  };
+  process.env.ZESARUX_PATH = '/opt/zesarux/zesarux';
+  process.env.ZESARUX_LAUNCH_TIMEOUT = '45000';
+  try {
+    const cfg = loadConfig();
+    assert.equal(cfg.zesarux.binaryPath, '/opt/zesarux/zesarux');
+    assert.equal(cfg.zesarux.launchTimeout, 45000);
+  } finally {
+    if (saved.path === undefined) delete process.env.ZESARUX_PATH;
+    else process.env.ZESARUX_PATH = saved.path;
+    if (saved.timeout === undefined) delete process.env.ZESARUX_LAUNCH_TIMEOUT;
+    else process.env.ZESARUX_LAUNCH_TIMEOUT = saved.timeout;
+  }
+});

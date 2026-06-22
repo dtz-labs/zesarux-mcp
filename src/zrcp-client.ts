@@ -55,10 +55,21 @@ export class ZRCPClient {
    */
   private static readonly PROMPT = 'command> ';
 
+  /**
+   * On a fresh connection ZEsarUX sends a welcome banner ending in a prompt
+   * *after* the TCP connect completes. connect() must not report ready until
+   * that banner has been drained, or the first command captures it instead of
+   * its own reply. If a server sends no banner, connect() falls back to ready
+   * after this grace period so it cannot hang.
+   */
+  private static readonly WELCOME_BANNER_GRACE_MS = 1000;
+
   private socket: Socket | null = null;
   private connected: boolean = false;
   private responseBuffer: string = '';
   private responseResolver: ((value: string) => void) | null = null;
+  /** Called once when the welcome banner is drained, to finish connect(). */
+  private onWelcome: (() => void) | null = null;
   private connectionPromise: Promise<void> | null = null;
   private reconnectTimeout: NodeJS.Timeout | null = null;
 
@@ -80,15 +91,31 @@ export class ZRCPClient {
       // connect/error/close/timeout wins. Without this, an 'error'/'close'
       // before 'connect' left the promise pending forever and start() hung.
       let settled = false;
+      let welcomeTimer: NodeJS.Timeout | null = null;
+
+      const finishConnect = () => {
+        if (settled) return;
+        settled = true;
+        this.onWelcome = null;
+        if (welcomeTimer) {
+          clearTimeout(welcomeTimer);
+          welcomeTimer = null;
+        }
+        this.connectionPromise = null;
+        resolve();
+      };
 
       this.socket = createConnection(this.options.port, this.options.host);
 
       this.socket.on('connect', () => {
         this.logger.info(`Connected to ZEsarUX at ${this.options.host}:${this.options.port}`);
         this.connected = true;
-        this.connectionPromise = null;
-        settled = true;
-        resolve();
+        // Wait for the welcome banner to be drained (handleData calls onWelcome)
+        // before reporting ready, so the first command isn't framed against the
+        // banner. Fall back after a grace period if no banner arrives.
+        this.onWelcome = finishConnect;
+        welcomeTimer = setTimeout(finishConnect, ZRCPClient.WELCOME_BANNER_GRACE_MS);
+        welcomeTimer.unref?.();
       });
 
       this.socket.on('data', (data: Buffer) => {
@@ -209,7 +236,11 @@ export class ZRCPClient {
     if (!this.responseResolver) {
       // No command is awaiting a reply, so this is the connection's welcome
       // banner (or other unsolicited output). Discard it — consuming it here
-      // keeps the buffer clean so the first real command is framed correctly.
+      // keeps the buffer clean so the first real command is framed correctly —
+      // and signal connect() that the banner has been drained.
+      const onWelcome = this.onWelcome;
+      this.onWelcome = null;
+      onWelcome?.();
       return;
     }
 
