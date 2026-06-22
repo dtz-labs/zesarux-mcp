@@ -157,6 +157,76 @@ function defaultSpawn(binary: string, args: string[]): ChildProcess {
   return spawn(binary, args, { stdio: 'ignore', detached: false });
 }
 
+/** Collaborators for the connect → (auto-launch) → reconnect bootstrap. */
+export interface BootstrapDeps {
+  host: string;
+  port: number;
+  autoLaunch: boolean;
+  binaryPath?: string;
+  launchArgs: string[];
+  launchTimeoutMs: number;
+  connect: () => Promise<void>;
+  disconnect: () => void;
+  ensureRunning: (host: string, port: number, options: EnsureRunningOptions) => Promise<boolean>;
+  logger: Logger;
+}
+
+/**
+ * Establish the initial ZRCP connection, auto-launching ZEsarUX if it is not
+ * reachable and auto-launch is enabled. Returns true once connected.
+ *
+ * On the first failure we `disconnect()` before launching: that cancels the
+ * client's pending auto-reconnect timer so it can't race our explicit reconnect
+ * over the shared socket. Never throws — a degraded server is the fallback.
+ */
+export async function bootstrapConnection(deps: BootstrapDeps): Promise<boolean> {
+  const { host, port, autoLaunch, logger } = deps;
+
+  try {
+    await deps.connect();
+    return true;
+  } catch (error) {
+    logger.warn(`Could not reach ZEsarUX at ${host}:${port}: ${describeError(error)}`);
+  }
+
+  if (!autoLaunch) {
+    logger.warn(
+      'Set ZESARUX_AUTOLAUNCH=true to have the server start ZEsarUX automatically.'
+    );
+    return false;
+  }
+
+  // Cancel any reconnect the failed connect scheduled and tear down the dead
+  // socket before we relaunch, so the background timer can't race us.
+  deps.disconnect();
+
+  const up = await deps.ensureRunning(host, port, {
+    binaryPath: deps.binaryPath,
+    extraArgs: deps.launchArgs,
+    launchTimeoutMs: deps.launchTimeoutMs,
+  });
+  if (!up) {
+    logger.warn('Auto-launch did not make ZEsarUX reachable; see docs/installation.md.');
+    return false;
+  }
+
+  try {
+    await deps.connect();
+    logger.info('Connected to auto-launched ZEsarUX.');
+    return true;
+  } catch (error) {
+    logger.warn(
+      `ZEsarUX was launched but the ZRCP connect failed: ${describeError(error)}; ` +
+        'see docs/troubleshooting.md.'
+    );
+    return false;
+  }
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /**
  * Manages a ZEsarUX process spawned by this server. If we did not spawn one
  * (because it was already running, or no binary was found), shutdown is a no-op.

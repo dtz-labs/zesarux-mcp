@@ -17,8 +17,26 @@ import {
   isPortOpen,
   waitForPort,
   ZesaruxLauncher,
+  bootstrapConnection,
+  BootstrapDeps,
 } from '../launcher.js';
 import { Logger } from '../logger.js';
+
+/** Base bootstrap deps; individual tests override what they care about. */
+function bootstrapDeps(overrides: Partial<BootstrapDeps>): BootstrapDeps {
+  return {
+    host: '127.0.0.1',
+    port: 10000,
+    autoLaunch: false,
+    launchArgs: [],
+    launchTimeoutMs: 20000,
+    connect: async () => {},
+    disconnect: () => {},
+    ensureRunning: async () => false,
+    logger: quietLogger,
+    ...overrides,
+  };
+}
 
 /** A logger that swallows output so test runs stay quiet. */
 const quietLogger = new Logger('error', false);
@@ -256,4 +274,103 @@ test('shutdown is a no-op when nothing was spawned', async () => {
   const launcher = new ZesaruxLauncher(quietLogger);
   await launcher.shutdown(); // must not throw
   assert.ok(true);
+});
+
+test('bootstrapConnection connects on the first try without launching', async () => {
+  let ensureCalled = false;
+  const connected = await bootstrapConnection(
+    bootstrapDeps({
+      autoLaunch: true,
+      connect: async () => {},
+      ensureRunning: async () => {
+        ensureCalled = true;
+        return true;
+      },
+    })
+  );
+  assert.equal(connected, true);
+  assert.equal(ensureCalled, false);
+});
+
+test('bootstrapConnection does not launch when auto-launch is disabled', async () => {
+  let ensureCalled = false;
+  const connected = await bootstrapConnection(
+    bootstrapDeps({
+      autoLaunch: false,
+      connect: async () => {
+        throw new Error('refused');
+      },
+      ensureRunning: async () => {
+        ensureCalled = true;
+        return true;
+      },
+    })
+  );
+  assert.equal(connected, false);
+  assert.equal(ensureCalled, false);
+});
+
+test('bootstrapConnection launches then reconnects when enabled', async () => {
+  const calls: string[] = [];
+  let connectAttempts = 0;
+  const connected = await bootstrapConnection(
+    bootstrapDeps({
+      autoLaunch: true,
+      binaryPath: '/opt/zesarux',
+      launchArgs: ['--vo', 'null'],
+      launchTimeoutMs: 5000,
+      connect: async () => {
+        connectAttempts++;
+        calls.push(`connect#${connectAttempts}`);
+        if (connectAttempts === 1) throw new Error('refused');
+      },
+      disconnect: () => calls.push('disconnect'),
+      ensureRunning: async (host, port, options) => {
+        calls.push(`ensureRunning:${host}:${port}:${options.extraArgs?.join(',')}`);
+        assert.equal(options.binaryPath, '/opt/zesarux');
+        assert.equal(options.launchTimeoutMs, 5000);
+        return true;
+      },
+    })
+  );
+  assert.equal(connected, true);
+  // disconnect must happen before launch, to cancel the auto-reconnect race.
+  assert.deepEqual(calls, [
+    'connect#1',
+    'disconnect',
+    'ensureRunning:127.0.0.1:10000:--vo,null',
+    'connect#2',
+  ]);
+});
+
+test('bootstrapConnection gives up when the emulator never becomes reachable', async () => {
+  let connectAttempts = 0;
+  const connected = await bootstrapConnection(
+    bootstrapDeps({
+      autoLaunch: true,
+      connect: async () => {
+        connectAttempts++;
+        throw new Error('refused');
+      },
+      ensureRunning: async () => false,
+    })
+  );
+  assert.equal(connected, false);
+  assert.equal(connectAttempts, 1); // no second connect after a failed launch
+});
+
+test('bootstrapConnection reports failure if the post-launch connect still fails', async () => {
+  let connectAttempts = 0;
+  const connected = await bootstrapConnection(
+    bootstrapDeps({
+      autoLaunch: true,
+      connect: async () => {
+        connectAttempts++;
+        throw new Error('refused');
+      },
+      ensureRunning: async () => true,
+    })
+  );
+  assert.equal(connected, false);
+  assert.equal(connectAttempts, 2); // launched, retried once, gave up
 });

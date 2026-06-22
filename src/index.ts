@@ -27,6 +27,7 @@ import { loadConfig } from './config.js';
 import { Logger } from './logger.js';
 import { ZRCPClient } from './zrcp-client.js';
 import { ZRCPServerTools } from './tools.js';
+import { ZesaruxLauncher, bootstrapConnection } from './launcher.js';
 
 /**
  * Main ZEsarUX MCP Server class
@@ -37,6 +38,7 @@ class ZRCPServer {
   private tools: ZRCPServerTools;
   private logger: Logger;
   private config: ReturnType<typeof loadConfig>;
+  private launcher: ZesaruxLauncher;
 
   constructor() {
     this.config = loadConfig();
@@ -53,6 +55,9 @@ class ZRCPServer {
       },
       this.logger
     );
+
+    // Launcher for optionally auto-starting ZEsarUX when it isn't reachable
+    this.launcher = new ZesaruxLauncher(this.logger);
 
     // Initialize tools registry
     this.tools = new ZRCPServerTools(this.zrcpClient, this.logger);
@@ -113,12 +118,24 @@ class ZRCPServer {
   async start(): Promise<void> {
     this.logger.info('Starting ZEsarUX MCP Server...');
 
-    // Connect to ZEsarUX
-    try {
-      await this.zrcpClient.connect();
+    // Connect to ZEsarUX, auto-launching it first if it isn't reachable and
+    // ZESARUX_AUTOLAUNCH is enabled.
+    const connected = await bootstrapConnection({
+      host: this.config.zesarux.host,
+      port: this.config.zesarux.port,
+      autoLaunch: this.config.zesarux.autoLaunch,
+      binaryPath: this.config.zesarux.binaryPath,
+      launchArgs: this.config.zesarux.launchArgs,
+      launchTimeoutMs: this.config.zesarux.launchTimeout,
+      connect: () => this.zrcpClient.connect(),
+      disconnect: () => this.zrcpClient.disconnect(),
+      ensureRunning: (host, port, options) => this.launcher.ensureRunning(host, port, options),
+      logger: this.logger,
+    });
+
+    if (connected) {
       this.logger.info('Connected to ZEsarUX');
-    } catch (error) {
-      this.logger.error('Failed to connect to ZEsarUX:', error);
+    } else {
       this.logger.warn('Server will start but tools may not work until connection is established');
     }
 
@@ -137,6 +154,8 @@ class ZRCPServer {
 
     await this.server.close();
     this.zrcpClient.disconnect();
+    // Kill an auto-launched ZEsarUX (no-op if the user started it themselves).
+    await this.launcher.shutdown();
 
     this.logger.info('ZEsarUX MCP Server stopped');
   }
