@@ -76,6 +76,80 @@ test('connect() rejects (does not hang) when nothing is listening', { timeout: 5
   client.disconnect();
 });
 
+/**
+ * Like startFakeZesarux, but sends the welcome banner only after `delayMs` and
+ * holds any command replies until the banner has been written. This forces the
+ * banner to reach the client *after* the first sendCommand, deterministically
+ * reproducing the race where a late banner is mistaken for the first reply.
+ */
+function startLateBannerZesarux(
+  delayMs: number,
+  responder: (cmd: string) => string
+): Promise<{ port: number; close: () => Promise<void> }> {
+  return new Promise((resolve, reject) => {
+    const server: Server = createServer((socket) => {
+      let repliesEnabled = false;
+      const pending: string[] = [];
+      const reply = (line: string) => socket.write(`${responder(line)}\ncommand> `);
+      setTimeout(() => {
+        // Banner is written as its own segment...
+        socket.write(
+          'Welcome to ZEsarUX remote command protocol (ZRCP)\n' +
+            'Write help for available commands\n\n' +
+            'command> '
+        );
+        // ...and replies follow only after a gap, so the banner arrives as a
+        // distinct 'data' event (not coalesced with the first reply).
+        setTimeout(() => {
+          repliesEnabled = true;
+          while (pending.length) reply(pending.shift() as string);
+        }, 40);
+      }, delayMs);
+      let buf = '';
+      socket.on('data', (chunk) => {
+        buf += chunk.toString('utf8');
+        let nl: number;
+        while ((nl = buf.indexOf('\n')) !== -1) {
+          const line = buf.slice(0, nl).replace(/\r$/, '').trim();
+          buf = buf.slice(nl + 1);
+          if (!line) continue;
+          if (repliesEnabled) reply(line);
+          else pending.push(line);
+        }
+      });
+    });
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address() as AddressInfo;
+      resolve({
+        port,
+        close: () => new Promise<void>((res) => server.close(() => res())),
+      });
+    });
+  });
+}
+
+test('first command is not corrupted by a late welcome banner', { timeout: 5000 }, async () => {
+  const fake = await startLateBannerZesarux(120, (cmd) =>
+    cmd === 'get-version' ? 'ZEsarUX 10.3' : `unknown command: ${cmd}`
+  );
+  const client = new ZRCPClient(
+    { host: '127.0.0.1', port: fake.port, timeout: 2000, autoReconnect: false },
+    silentLogger
+  );
+
+  try {
+    await client.connect();
+    // connect() must not report ready until the banner has been drained, or the
+    // first command captures the banner instead of its own reply.
+    const version = await client.sendCommand('get-version');
+    assert.strictEqual(version, 'ZEsarUX 10.3');
+  } finally {
+    client.disconnect();
+    await fake.close();
+  }
+});
+
 test('sendCommand returns the response framed by the "command> " prompt', { timeout: 5000 }, async () => {
   const fake = await startFakeZesarux((cmd) => {
     if (cmd === 'get-version') return 'ZEsarUX 10.3';
