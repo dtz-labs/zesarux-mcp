@@ -30,42 +30,72 @@ sudo apt-get install zesarux
 zesarux --enablezrcp --zrcpport 10000
 ```
 
-### 3. Install & Build MCP Server
+### 3. Install the MCP Server
+
+The server is published to npm as [`@dtz-labs/zesarux-mcp`](https://www.npmjs.com/package/@dtz-labs/zesarux-mcp) — no clone or build needed. Your MCP client launches it on demand via `npx`; nothing to install globally.
+
+<details>
+<summary>From source (for development)</summary>
 
 ```bash
 git clone https://github.com/dtz-labs/zesarux-mcp.git
 cd zesarux-mcp
 npm install
-npm run build
+npm run build   # produces dist/index.js
 ```
 
-### 4. Configure MCP
+Then point your config at `"command": "node", "args": ["/absolute/path/to/zesarux-mcp/dist/index.js"]`.
+</details>
+
+### 4. Configure your MCP client
+
+**Claude Code** — one command:
+```bash
+claude mcp add zesarux -- npx -y @dtz-labs/zesarux-mcp
+```
+
+…or commit a project-scoped `.mcp.json` to your repo:
+```json
+{
+  "mcpServers": {
+    "zesarux": {
+      "command": "npx",
+      "args": ["-y", "@dtz-labs/zesarux-mcp"],
+      "env": {
+        "ZESARUX_HOST": "localhost",
+        "ZESARUX_PORT": "10000",
+        "LOG_LEVEL": "info"
+      }
+    }
+  }
+}
+```
 
 **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
     "zesarux": {
-      "command": "node",
-      "args": ["/absolute/path/to/zesarux-mcp/dist/index.js"]
-    }
-  }
-}
-```
-
-**Claude Code** (`~/.config/claude-code/config.json`):
-```json
-{
-  "mcpServers": {
-    "zesarux": {
-      "command": "node",
-      "args": ["/absolute/path/to/zesarux-mcp/dist/index.js"]
+      "command": "npx",
+      "args": ["-y", "@dtz-labs/zesarux-mcp"],
+      "env": { "ZESARUX_HOST": "localhost", "ZESARUX_PORT": "10000" }
     }
   }
 }
 ```
 
 Restart Claude and the tools will be available.
+
+#### Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ZESARUX_HOST` | `localhost` | Host where ZEsarUX ZRCP is listening |
+| `ZESARUX_PORT` | `10000` | ZRCP port (matches `--zrcpport`) |
+| `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` (all logs go to stderr) |
+| `ZESARUX_TIMEOUT` | `30000` | ZRCP request timeout, ms |
+| `ZESARUX_RETRY_ATTEMPTS` | `3` | Connection retry attempts |
+| `ZESARUX_AUTO_RECONNECT` | `true` | Reconnect automatically if the link drops |
 
 ## Documentation
 
